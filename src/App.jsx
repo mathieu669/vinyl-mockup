@@ -21,9 +21,6 @@ const BASE = {
   subtitle: "Product loop",
   blockRot: 0,
   shadowA: 0.28,
-  sleevePx: 8,
-  discPx: 3.5,
-  camera: 1400,
   phaseScales: [1, 1, 1, 1, 1, 1],
   phasePos: [
     [0, 0],
@@ -325,276 +322,119 @@ function sweep(ctx, x, y, n, s, p) {
   ctx.restore();
 }
 
-/* -----------------------------
-   3D HELPERS
------------------------------ */
-function poly(ctx, pts) {
-  ctx.beginPath();
-  ctx.moveTo(pts[0].x, pts[0].y);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.closePath();
-}
+function spine(ctx, img, x, y, n, side = 1, a = 0.5, hue = 215) {
+  if (a <= 0.05) return;
 
-function rotY(x, z, a) {
-  return {
-    x: x * Math.cos(a) + z * Math.sin(a),
-    z: z * Math.cos(a) - x * Math.sin(a),
-  };
-}
-
-function proj(x, y, z, camera) {
-  const k = camera / (camera - z);
-  return { x: x * k, y: y * k, k };
-}
-
-function p3(x, y, z, aY, camera) {
-  const r = rotY(x, z, aY);
-  return proj(r.x, y, r.z, camera);
-}
-
-function boundsOf(pts) {
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  const x = Math.min(...xs);
-  const y = Math.min(...ys);
-  const w = Math.max(...xs) - x;
-  const h = Math.max(...ys) - y;
-  return { x, y, w, h };
-}
-
-function drawFaceStrips(ctx, img, label, n, zFace, aY, camera, hue = 215, s, p) {
-  const h = n / 2;
-  const strips = 36;
-  const order = [...Array(strips).keys()];
-  if (Math.sin(aY) > 0) order.reverse();
-
-  for (const i of order) {
-    const x0 = -h + (n * i) / strips;
-    const x1 = -h + (n * (i + 1)) / strips;
-
-    const quad = [
-      p3(x0, -h, zFace, aY, camera),
-      p3(x1, -h, zFace, aY, camera),
-      p3(x1, h, zFace, aY, camera),
-      p3(x0, h, zFace, aY, camera),
-    ];
-
-    const b = boundsOf(quad);
-
-    ctx.save();
-    poly(ctx, quad);
-    ctx.clip();
-
-    if (img) {
-      const sw = Math.max(1, img.width / strips);
-      ctx.drawImage(
-        img,
-        (img.width * i) / strips,
-        0,
-        sw,
-        img.height,
-        b.x,
-        b.y,
-        Math.max(1, b.w),
-        Math.max(1, b.h)
-      );
-    } else {
-      const g = ctx.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.h);
-      g.addColorStop(0, `hsl(${hue},72%,54%)`);
-      g.addColorStop(1, `hsl(${hue + 40},68%,28%)`);
-      ctx.fillStyle = g;
-      ctx.fillRect(b.x, b.y, Math.max(1, b.w), Math.max(1, b.h));
-    }
-
-    ctx.restore();
-  }
-
-  const face = [
-    p3(-h, -h, zFace, aY, camera),
-    p3(h, -h, zFace, aY, camera),
-    p3(h, h, zFace, aY, camera),
-    p3(-h, h, zFace, aY, camera),
-  ];
-
-  const b = boundsOf(face);
-
-  if (s?.sweep) {
-    ctx.save();
-    poly(ctx, face);
-    ctx.clip();
-    sweep(ctx, b.x, b.y, Math.max(b.w, b.h), s, p);
-    ctx.restore();
-  }
+  const d = 5;
+  const sx = side > 0 ? x + n : x - d;
+  const col = domCol(img, hue);
+  const g = ctx.createLinearGradient(sx, 0, sx + d * side, 0);
 
   ctx.save();
-  poly(ctx, face);
-  ctx.strokeStyle = "rgba(255,255,255,.14)";
-  ctx.lineWidth = 1.6;
-  ctx.stroke();
-  ctx.restore();
-
-  if (!img) {
-    ctx.save();
-    poly(ctx, face);
-    ctx.clip();
-    ctx.fillStyle = "rgba(255,255,255,.95)";
-    ctx.textAlign = "center";
-    ctx.font = `${Math.max(18, n * 0.07)}px Inter, Arial`;
-    ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2);
-    ctx.restore();
-  }
-}
-
-function drawLateralFace(ctx, img, n, depth, aY, camera, side = 1, hue = 215) {
-  const h = n / 2;
-  const d = depth / 2;
-
-  const pts = [
-    p3(side * h, -h, d, aY, camera),
-    p3(side * h, -h, -d, aY, camera),
-    p3(side * h, h, -d, aY, camera),
-    p3(side * h, h, d, aY, camera),
-  ];
-
-  const col = domCol(img, hue);
-  const b = boundsOf(pts);
-  const g = ctx.createLinearGradient(b.x, 0, b.x + b.w, 0);
+  ctx.globalAlpha = a;
 
   g.addColorStop(0, "#111");
   g.addColorStop(0.5, col);
-  g.addColorStop(1, "#0d0d0d");
+  g.addColorStop(1, "#111");
 
-  ctx.save();
-  poly(ctx, pts);
   ctx.fillStyle = g;
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,.08)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  ctx.fillRect(sx, y, d, n);
 
-  ctx.clip();
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = "rgba(255,255,255,.45)";
+  ctx.globalAlpha = a * 0.45;
+  ctx.strokeStyle = col;
   ctx.lineWidth = 0.7;
 
-  for (let t = 0.08; t < 0.95; t += 0.09) {
-    const ax = lerp(pts[0].x, pts[3].x, t);
-    const ay = lerp(pts[0].y, pts[3].y, t);
-    const bx = lerp(pts[1].x, pts[2].x, t);
-    const by = lerp(pts[1].y, pts[2].y, t);
+  for (let i = 18; i < n - 18; i += 22) {
     ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
+    ctx.moveTo(sx + 1, y + i);
+    ctx.lineTo(sx + d - 1, y + i);
     ctx.stroke();
   }
 
   ctx.restore();
 }
 
-function drawOpeningSlot(ctx, n, depth, aY, camera, side = 1) {
-  const h = n / 2;
-  const d = depth / 2;
-  const x = side * (h - 1.6);
-
-  const pts = [
-    p3(x, -h, d, aY, camera),
-    p3(x, -h, -d, aY, camera),
-    p3(x, h, -d, aY, camera),
-    p3(x, h, d, aY, camera),
-  ];
+function sleeve(ctx, img, x, y, n, label, s, p, hue = 215) {
+  ctx.save();
+  ctx.fillStyle = "#111";
+  ctx.fillRect(x, y, n, n);
 
   ctx.save();
-  poly(ctx, pts);
-  ctx.fillStyle = "rgba(0,0,0,.28)";
-  ctx.fill();
+  ctx.rect(x, y, n, n);
+  ctx.clip();
+
+  if (img) {
+    fit(ctx, img, x, y, n, n);
+  } else {
+    const g = ctx.createLinearGradient(x, y, x + n, y + n);
+    g.addColorStop(0, `hsl(${hue},72%,54%)`);
+    g.addColorStop(1, `hsl(${hue + 50},68%,28%)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, n, n);
+    ctx.fillStyle = "#fff";
+    ctx.font = `${n * 0.07}px Inter,Arial`;
+    ctx.textAlign = "center";
+    ctx.fillText(label, x + n / 2, y + n / 2);
+  }
+
+  sweep(ctx, x, y, n, s, p);
+  ctx.restore();
+
+  ctx.strokeStyle = "rgba(255,255,255,.14)";
+  ctx.lineWidth = Math.max(1.5, n * 0.0045);
+  ctx.strokeRect(x, y, n, n);
   ctx.restore();
 }
 
-function drawSleeve3D(ctx, front, back, n, depth, aY, s, p, openSide = 1) {
-  const frontVisible = Math.cos(aY) >= 0;
-  const art = frontVisible ? front : back || front;
-  const hue = frontVisible ? 215 : 345;
-  const zFace = frontVisible ? depth / 2 : -depth / 2;
-  const visibleSide = Math.sin(aY) > 0 ? -1 : 1;
+function discEdge(ctx, x, y, r, a) {
+  if (a <= 0) return;
 
-  if (Math.abs(Math.sin(aY)) > 0.03) {
-    drawLateralFace(ctx, art, n, depth, aY, s.camera, visibleSide, hue);
-  }
-
-  drawOpeningSlot(ctx, n, depth, aY, s.camera, openSide);
-  drawFaceStrips(
-    ctx,
-    art,
-    frontVisible ? "FRONT COVER" : "BACK COVER",
-    n,
-    zFace,
-    aY,
-    s.camera,
-    hue,
-    s,
-    p
-  );
-}
-
-function drawDiscBand(ctx, x, y, rx, ry, band, side = 1) {
-  if (band < 0.6) return;
-
-  const steps = 28;
-  const start = side > 0 ? -Math.PI / 2 : Math.PI / 2;
-  const end = side > 0 ? Math.PI / 2 : Math.PI * 1.5;
-
-  ctx.beginPath();
-
-  for (let i = 0; i <= steps; i++) {
-    const t = start + ((end - start) * i) / steps;
-    const px = x + band / 2 + rx * Math.cos(t);
-    const py = y + ry * Math.sin(t);
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-
-  for (let i = steps; i >= 0; i--) {
-    const t = start + ((end - start) * i) / steps;
-    const px = x - band / 2 + rx * Math.cos(t);
-    const py = y + ry * Math.sin(t);
-    ctx.lineTo(px, py);
-  }
-
-  ctx.closePath();
-
-  const g = ctx.createLinearGradient(x - band, y, x + band, y);
-  g.addColorStop(0, "#0a0a0a");
-  g.addColorStop(0.5, "#787878");
-  g.addColorStop(1, "#0a0a0a");
+  const d = 2;
+  const g = ctx.createLinearGradient(x - d, y, x + d, y);
 
   ctx.save();
+  ctx.globalAlpha = a;
+
+  g.addColorStop(0, "#050505");
+  g.addColorStop(0.5, "#777");
+  g.addColorStop(1, "#050505");
+
   ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(x, y, d / 2, r, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,.08)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
   ctx.restore();
 }
 
-function drawDiscFace(ctx, img, lab, x, y, r, rx, spin, backFace = false) {
-  const sx = Math.max(0.08, rx / r);
+function disc(ctx, img, lab, x, y, r, a = 0, shadow = true) {
+  if (shadow) {
+    ctx.save();
+    ctx.translate(x, y + r * 1.02);
+    ctx.scale(1, 0.24);
+    ctx.filter = "blur(18px)";
+    ctx.fillStyle = "rgba(0,0,0,.26)";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.92, r * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(sx, 1);
+  ctx.rotate(a);
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.clip();
-  ctx.rotate(spin);
 
-  if (img && !backFace) {
+  if (img) {
     fit(ctx, img, -r, -r, r * 2, r * 2);
   } else {
     const g = ctx.createRadialGradient(0, 0, r * 0.08, 0, 0, r);
-    g.addColorStop(0, backFace ? "#2d2d2d" : "#3f3f3f");
+    g.addColorStop(0, "#3f3f3f");
     g.addColorStop(0.18, "#111");
     g.addColorStop(0.72, "#050505");
-    g.addColorStop(1, backFace ? "#121212" : "#191919");
+    g.addColorStop(1, "#191919");
+
     ctx.fillStyle = g;
     ctx.fillRect(-r, -r, r * 2, r * 2);
 
@@ -608,7 +448,7 @@ function drawDiscFace(ctx, img, lab, x, y, r, rx, spin, backFace = false) {
     }
   }
 
-  ctx.strokeStyle = "rgba(255,255,255,.12)";
+  ctx.strokeStyle = "rgba(255,255,255,.15)";
   ctx.lineWidth = r * 0.018;
   ctx.beginPath();
   ctx.arc(0, 0, r * 0.78, -0.9, -0.2);
@@ -617,88 +457,73 @@ function drawDiscFace(ctx, img, lab, x, y, r, rx, spin, backFace = false) {
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(sx, 1);
-  ctx.rotate(spin * 0.8);
+  ctx.rotate(a * 0.8);
   ctx.beginPath();
   ctx.arc(0, 0, r * 0.255, 0, Math.PI * 2);
   ctx.clip();
 
-  if (lab && !backFace) {
+  if (lab) {
     fit(ctx, lab, -r * 0.255, -r * 0.255, r * 0.51, r * 0.51);
   } else {
     const g = ctx.createLinearGradient(-r * 0.25, -r * 0.25, r * 0.25, r * 0.25);
-    g.addColorStop(0, backFace ? "#d8d0c4" : "#f4f0e8");
-    g.addColorStop(1, backFace ? "#9a8d7d" : "#c7b99a");
+    g.addColorStop(0, "#f4f0e8");
+    g.addColorStop(1, "#c7b99a");
     ctx.fillStyle = g;
     ctx.fillRect(-r * 0.26, -r * 0.26, r * 0.52, r * 0.52);
   }
 
   ctx.restore();
 
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(sx, 1);
   ctx.fillStyle = "#ece6d8";
   ctx.beginPath();
-  ctx.arc(0, 0, r * 0.04, 0, Math.PI * 2);
+  ctx.arc(x, y, r * 0.04, 0, Math.PI * 2);
   ctx.fill();
-  ctx.restore();
 }
 
-function disc3D(ctx, img, lab, x, y, r, turnA, spin, depth, shadow = true) {
-  const rx = Math.max(r * 0.08, r * Math.abs(Math.cos(turnA)));
-  const side = Math.sin(turnA) > 0 ? -1 : 1;
-  const band = Math.abs(Math.sin(turnA)) * depth * 2.2;
-  const backFace = Math.cos(turnA) < 0;
-
-  if (shadow) {
-    ctx.save();
-    ctx.translate(x, y + r * 1.02);
-    ctx.scale(1, 0.24);
-    ctx.filter = "blur(18px)";
-    ctx.fillStyle = "rgba(0,0,0,.26)";
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r * 0.92, r * 0.34, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  drawDiscBand(ctx, x, y, rx, r, band, side);
-  drawDiscFace(ctx, img, lab, x, y, r, rx, spin, backFace);
-}
-
-function pack(ctx, a, n, back, out, spin, s, p, turnA) {
-  const openSide = back ? -1 : 1;
-  const dx = openSide * n * out;
+function pack(ctx, a, n, back, out, spin, edge, s, p) {
+  const x = -n / 2;
+  const y = -n / 2;
+  const side = back ? -1 : 1;
+  const dx = side * n * out;
   const r = n * 0.49;
+  const art = back ? a.back : a.front;
+  const hue = back ? 345 : 215;
 
   if (out > 0.01) {
     ctx.save();
-    ctx.globalAlpha = 0.18 + out * 0.14;
-    ctx.filter = "blur(12px)";
-    ctx.fillStyle = "rgba(0,0,0,.42)";
+    ctx.globalAlpha = 0.28;
+    ctx.filter = "blur(10px)";
+    ctx.fillStyle = "rgba(0,0,0,.55)";
     ctx.beginPath();
-    ctx.ellipse(dx * 0.58, 0, r * 0.92, r * 0.78, 0, 0, Math.PI * 2);
+    ctx.ellipse(dx * 0.92, 0, r * 0.88, r * 0.88, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-
-    disc3D(ctx, a.vinyl, a.label, dx, 0, r, turnA, spin, s.discPx, false);
   }
 
-  drawSleeve3D(ctx, a.front, a.back, n, s.sleevePx, turnA, s, p, openSide);
+  discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
+  spine(ctx, art, x, y, n, side, edge, hue);
+
+  if (out > 0.01) {
+    disc(ctx, a.vinyl, a.label, dx, 0, r, spin, false);
+  }
+
+  sleeve(ctx, art, x, y, n, back ? "BACK COVER" : "FRONT COVER", s, p, hue);
 }
 
 function album360(ctx, a, cx, cy, n, p, s) {
   const q = seq(p, s);
+  const c = Math.max(0.055, Math.abs(Math.cos(q.ang)));
   const back = Math.cos(q.ang) < 0;
+  const shear = Math.sin(q.ang) * 0.018;
+  const edge = 1 - Math.min(1, c * 1.55);
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
   const sn = n * q.z;
 
   objShadow(
     ctx,
     cx + q.x,
-    cy + q.py + sn * 0.72 + q.y * 0.15,
-    sn * (0.56 + q.out * 0.28 + Math.abs(Math.sin(q.ang)) * 0.14),
+    cy + q.py + sn * 0.7 + q.y * 0.18,
+    sn * (0.58 + q.out * 0.32),
     sn * 0.19,
     s.shadowA
   );
@@ -707,26 +532,41 @@ function album360(ctx, a, cx, cy, n, p, s) {
   ctx.translate(cx + q.x, cy + q.py + q.y);
   ctx.rotate(rot);
   ctx.scale(q.z, q.z);
-  pack(ctx, a, n, back, q.out, q.spin, s, p, q.ang);
+  ctx.transform(c, 0, shear, 1, 0, 0);
+  pack(ctx, a, n, back, q.out, q.spin, edge, s, p);
   ctx.restore();
 }
 
 function reveal(ctx, a, cx, cy, n, p, s) {
   const r = n * 0.49;
+  const w = n * 1.67;
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
   const spin = p * Math.PI * 2 * s.discSpin;
   const y = Math.sin(p * Math.PI * 2) * 14;
-  const turnA = -0.16;
-  const dx = n * 0.67;
 
-  objShadow(ctx, cx, cy + n * 0.38 + y * 0.15, n * 0.82, n * 0.18, s.shadowA);
+  objShadow(ctx, cx, cy + n * 0.38 + y * 0.15, n * 0.78, n * 0.18, s.shadowA);
 
   ctx.save();
   ctx.translate(cx, cy + y);
   ctx.rotate(rot);
 
-  disc3D(ctx, a.vinyl, a.label, dx, 0, r, turnA, spin, s.discPx, true);
-  drawSleeve3D(ctx, a.front, a.back, n, s.sleevePx, turnA, s, p, 1);
+  const sx = -w / 2;
+  const sy = -n / 2;
+  const dx = sx + n / 2 + n * 0.67;
+
+  ctx.save();
+  ctx.globalAlpha = 0.28;
+  ctx.filter = "blur(10px)";
+  ctx.fillStyle = "rgba(0,0,0,.55)";
+  ctx.beginPath();
+  ctx.ellipse(dx * 0.92, 0, r * 0.88, r * 0.88, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  discEdge(ctx, dx, 0, r, 0.75);
+  disc(ctx, a.vinyl, a.label, dx, 0, r, spin, true);
+  spine(ctx, a.front, sx, sy, n, 1, 0.55, 215);
+  sleeve(ctx, a.front, sx, sy, n, "FRONT COVER", s, p);
 
   ctx.restore();
 }
@@ -734,14 +574,14 @@ function reveal(ctx, a, cx, cy, n, p, s) {
 function coverOnly(ctx, a, cx, cy, n, p, s) {
   const y = Math.sin(p * Math.PI * 2) * 12;
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
-  const turnA = -0.12;
 
-  objShadow(ctx, cx, cy + n * 0.38 + y * 0.15, n * 0.64, n * 0.17, s.shadowA);
+  objShadow(ctx, cx, cy + n * 0.38 + y * 0.15, n * 0.62, n * 0.17, s.shadowA);
 
   ctx.save();
   ctx.translate(cx, cy + y);
   ctx.rotate(rot);
-  drawSleeve3D(ctx, a.front, a.back, n, s.sleevePx, turnA, s, p, 1);
+  spine(ctx, a.front, -n / 2, -n / 2, n, 1, 0.5, 215);
+  sleeve(ctx, a.front, -n / 2, -n / 2, n, "FRONT COVER", s, p);
   ctx.restore();
 }
 
@@ -926,9 +766,6 @@ function Num({ label, value, set, min = 0.5, max = 3, step = 0.5 }) {
   );
 }
 
-/* -----------------------------
-   MAIN COMPONENT
------------------------------ */
 export default function VinylMockupAnimator() {
   const canvas = useRef(null);
   const chunks = useRef([]);
@@ -945,7 +782,6 @@ export default function VinylMockupAnimator() {
   const [profileName, setProfileName] = useState("");
   const [profiles, setProfiles] = useState(() => {
     try {
-      if (typeof window === "undefined") return [];
       return JSON.parse(localStorage.getItem(PROFILE_KEY) || "[]");
     } catch {
       return [];
@@ -958,10 +794,7 @@ export default function VinylMockupAnimator() {
   const [rec, setRec] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const canRec = useMemo(
-    () => typeof window !== "undefined" && typeof MediaRecorder !== "undefined",
-    []
-  );
+  const canRec = useMemo(() => typeof MediaRecorder !== "undefined", []);
 
   const up = (k, v) => setS((o) => ({ ...o, [k]: v }));
   const upSrc = (k, v) => setSrc((o) => ({ ...o, [k]: v }));
@@ -1329,35 +1162,6 @@ export default function VinylMockupAnimator() {
                 max="0.6"
                 step="0.02"
                 set={(v) => up("shadowA", v)}
-              />
-
-              <Range
-                label="Épaisseur pochette"
-                value={s.sleevePx}
-                min="2"
-                max="18"
-                step="0.5"
-                suffix="px"
-                set={(v) => up("sleevePx", v)}
-              />
-
-              <Range
-                label="Épaisseur vinyle"
-                value={s.discPx}
-                min="1"
-                max="10"
-                step="0.5"
-                suffix="px"
-                set={(v) => up("discPx", v)}
-              />
-
-              <Range
-                label="Perspective caméra"
-                value={s.camera}
-                min="800"
-                max="2200"
-                step="50"
-                set={(v) => up("camera", v)}
               />
 
               <div className="rounded-2xl border border-neutral-200 bg-white p-3">
