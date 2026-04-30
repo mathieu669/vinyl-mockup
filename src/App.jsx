@@ -21,8 +21,6 @@ const BASE = {
   subtitle: "Product loop",
   blockRot: 0,
   shadowA: 0.28,
-  sleeveDepth: 8,
-  discDepth: 3.5,
   phaseScales: [1, 1, 1, 1, 1, 1],
   phasePos: [
     [0, 0],
@@ -324,60 +322,35 @@ function sweep(ctx, x, y, n, s, p) {
   ctx.restore();
 }
 
-function spine(ctx, artImg, spineImg, x, y, n, side = 1, a = 0.5, hue = 215, depth = 8) {
+function spine(ctx, img, x, y, n, side = 1, a = 0.5, hue = 215) {
   if (a <= 0.05) return;
 
-  const d = Math.max(3, depth);
+  const d = 5;
   const sx = side > 0 ? x + n : x - d;
-  const col = domCol(artImg, hue);
+  const col = domCol(img, hue);
+  const g = ctx.createLinearGradient(sx, 0, sx + d * side, 0);
 
   ctx.save();
   ctx.globalAlpha = a;
 
-  ctx.beginPath();
-  ctx.rect(sx, y, d, n);
-  ctx.clip();
+  g.addColorStop(0, "#111");
+  g.addColorStop(0.5, col);
+  g.addColorStop(1, "#111");
 
-  if (spineImg) {
-    // Image dédiée de tranche : elle est appliquée uniquement sur la surface latérale.
-    fit(ctx, spineImg, sx, y, d, n);
+  ctx.fillStyle = g;
+  ctx.fillRect(sx, y, d, n);
 
-    // Ombre/lumière pour garder l'impression de volume.
-    const shade = ctx.createLinearGradient(sx, 0, sx + d * side, 0);
-    shade.addColorStop(0, "rgba(0,0,0,.55)");
-    shade.addColorStop(0.5, "rgba(255,255,255,.16)");
-    shade.addColorStop(1, "rgba(0,0,0,.48)");
-    ctx.fillStyle = shade;
-    ctx.fillRect(sx, y, d, n);
-  } else {
-    const g = ctx.createLinearGradient(sx, 0, sx + d * side, 0);
-    g.addColorStop(0, "#070707");
-    g.addColorStop(0.18, "#1d1d1d");
-    g.addColorStop(0.52, col);
-    g.addColorStop(0.82, "#262626");
-    g.addColorStop(1, "#050505");
-    ctx.fillStyle = g;
-    ctx.fillRect(sx, y, d, n);
+  ctx.globalAlpha = a * 0.45;
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 0.7;
 
-    ctx.globalAlpha = a * 0.45;
-    ctx.strokeStyle = col;
-    ctx.lineWidth = Math.max(0.7, d * 0.08);
-
-    for (let i = 18; i < n - 18; i += 22) {
-      ctx.beginPath();
-      ctx.moveTo(sx + d * 0.18, y + i);
-      ctx.lineTo(sx + d * 0.82, y + i);
-      ctx.stroke();
-    }
+  for (let i = 18; i < n - 18; i += 22) {
+    ctx.beginPath();
+    ctx.moveTo(sx + 1, y + i);
+    ctx.lineTo(sx + d - 1, y + i);
+    ctx.stroke();
   }
 
-  ctx.restore();
-
-  ctx.save();
-  ctx.globalAlpha = a * 0.75;
-  ctx.strokeStyle = "rgba(255,255,255,.10)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(sx, y, d, n);
   ctx.restore();
 }
 
@@ -413,32 +386,22 @@ function sleeve(ctx, img, x, y, n, label, s, p, hue = 215) {
   ctx.restore();
 }
 
-function discEdge(ctx, x, y, r, a, depth = 3.5) {
+function discEdge(ctx, x, y, r, a) {
   if (a <= 0) return;
 
-  const d = Math.max(1.5, depth);
-
-  // Fine masse derrière la face du disque : donne une sensation de disque solide.
-  ctx.save();
-  ctx.globalAlpha = a * 0.45;
-  ctx.fillStyle = "#060606";
-  ctx.beginPath();
-  ctx.arc(x, y, r + d * 0.42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  // Tranche visible du vinyle, sans modifier sa position ni son mouvement.
+  const d = 2;
   const g = ctx.createLinearGradient(x - d, y, x + d, y);
+
   ctx.save();
   ctx.globalAlpha = a;
+
   g.addColorStop(0, "#050505");
-  g.addColorStop(0.42, "#777");
-  g.addColorStop(0.55, "#aaa");
+  g.addColorStop(0.5, "#777");
   g.addColorStop(1, "#050505");
 
   ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.ellipse(x, y, d * 0.45, r + d * 0.25, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y, d / 2, r, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -537,8 +500,8 @@ function pack(ctx, a, n, back, out, spin, edge, s, p) {
     ctx.restore();
   }
 
-  discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2), s.discDepth ?? 3.5);
-  spine(ctx, art, a.spine, x, y, n, side, edge, hue, s.sleeveDepth ?? 8);
+  discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
+  spine(ctx, art, x, y, n, side, edge, hue);
 
   if (out > 0.01) {
     disc(ctx, a.vinyl, a.label, dx, 0, r, spin, false);
@@ -600,9 +563,9 @@ function reveal(ctx, a, cx, cy, n, p, s) {
   ctx.fill();
   ctx.restore();
 
-  discEdge(ctx, dx, 0, r, 0.75, s.discDepth ?? 3.5);
+  discEdge(ctx, dx, 0, r, 0.75);
   disc(ctx, a.vinyl, a.label, dx, 0, r, spin, true);
-  spine(ctx, a.front, a.spine, sx, sy, n, 1, 0.55, 215, s.sleeveDepth ?? 8);
+  spine(ctx, a.front, sx, sy, n, 1, 0.55, 215);
   sleeve(ctx, a.front, sx, sy, n, "FRONT COVER", s, p);
 
   ctx.restore();
@@ -617,7 +580,7 @@ function coverOnly(ctx, a, cx, cy, n, p, s) {
   ctx.save();
   ctx.translate(cx, cy + y);
   ctx.rotate(rot);
-  spine(ctx, a.front, a.spine, -n / 2, -n / 2, n, 1, 0.5, 215, s.sleeveDepth ?? 8);
+  spine(ctx, a.front, -n / 2, -n / 2, n, 1, 0.5, 215);
   sleeve(ctx, a.front, -n / 2, -n / 2, n, "FRONT COVER", s, p);
   ctx.restore();
 }
@@ -810,7 +773,6 @@ export default function VinylMockupAnimator() {
   const [src, setSrc] = useState({
     front: "",
     back: "",
-    spine: "",
     vinyl: "",
     label: "",
     bg: "",
@@ -872,9 +834,9 @@ export default function VinylMockupAnimator() {
   useEffect(() => {
     let off = false;
 
-    Promise.all([src.front, src.back, src.spine, src.vinyl, src.label, src.bg].map(loadImg)).then(
-      ([front, back, spine, vinyl, label, bg]) => {
-        if (!off) setImgs({ front, back, spine, vinyl, label, bg });
+    Promise.all([src.front, src.back, src.vinyl, src.label, src.bg].map(loadImg)).then(
+      ([front, back, vinyl, label, bg]) => {
+        if (!off) setImgs({ front, back, vinyl, label, bg });
       }
     );
 
@@ -994,7 +956,7 @@ export default function VinylMockupAnimator() {
             <span className="rounded-full border border-white/10 px-3 py-1">1080 × 1920</span>
             <span className="rounded-full border border-white/10 px-3 py-1">{s.duration}s</span>
             <span className="rounded-full border border-white/10 px-3 py-1">
-              {Object.values(src).filter(Boolean).length}/6 fichiers
+              {Object.values(src).filter(Boolean).length}/5 fichiers
             </span>
           </div>
         </div>
@@ -1112,13 +1074,6 @@ export default function VinylMockupAnimator() {
               />
 
               <Upload
-                label="Tranche / spine"
-                value={src.spine}
-                set={(v) => upSrc("spine", v)}
-                hint="Image verticale de la tranche"
-              />
-
-              <Upload
                 label="Vinyle"
                 value={src.vinyl}
                 set={(v) => upSrc("vinyl", v)}
@@ -1143,7 +1098,7 @@ export default function VinylMockupAnimator() {
             <button
               type="button"
               onClick={() => {
-                setSrc({ front: "", back: "", spine: "", vinyl: "", label: "", bg: "" });
+                setSrc({ front: "", back: "", vinyl: "", label: "", bg: "" });
                 clearExport();
               }}
               className="mt-3 text-xs font-semibold text-neutral-500 hover:text-neutral-950"
@@ -1207,26 +1162,6 @@ export default function VinylMockupAnimator() {
                 max="0.6"
                 step="0.02"
                 set={(v) => up("shadowA", v)}
-              />
-
-              <Range
-                label="Épaisseur pochette"
-                value={s.sleeveDepth ?? 8}
-                min="3"
-                max="18"
-                step="0.5"
-                suffix="px"
-                set={(v) => up("sleeveDepth", v)}
-              />
-
-              <Range
-                label="Épaisseur vinyle"
-                value={s.discDepth ?? 3.5}
-                min="1.5"
-                max="10"
-                step="0.5"
-                suffix="px"
-                set={(v) => up("discDepth", v)}
               />
 
               <div className="rounded-2xl border border-neutral-200 bg-white p-3">
