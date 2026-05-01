@@ -31,6 +31,7 @@ const BASE = {
   shadowA: 0.28,
   sleeveDepth: 18,
   sleeveVignette: 0.18,
+  phaseDiscOut: [0, 0, 24, 67, 67, 67],
   phaseScales: [1, 1, 1, 1, 1, 1],
   phasePos: [
     [0, 0],
@@ -63,8 +64,8 @@ const PRESETS = [
       mode: "album360",
       duration: 8,
       discSpin: 1.2,
-      bgA: "#101114",
-      bgB: "#40382d",
+      bgA: "#ffffff",
+      bgB: "#ffffff",
       title: "LIMITED EDITION",
       subtitle: "Full album rotation",
       blockRot: -8,
@@ -80,8 +81,8 @@ const PRESETS = [
       mode: "coverOnly",
       duration: 6,
       discSpin: 0,
-      bgA: "#faf7ef",
-      bgB: "#4a4338",
+      bgA: "#ffffff",
+      bgB: "#ffffff",
       title: "VINYL EDITION",
       subtitle: "Cover preview",
     },
@@ -93,6 +94,7 @@ const PROFILE_KEY = "vinylMockupProfilesV1";
 const cleanSettings = (o) => ({
   ...o,
   phaseScales: [...(o.phaseScales || BASE.phaseScales)],
+  phaseDiscOut: [...(o.phaseDiscOut || BASE.phaseDiscOut)],
   phasePos: (o.phasePos || BASE.phasePos).map((p) => [p[0], p[1]]),
 });
 
@@ -180,6 +182,9 @@ function seq(p, s) {
   const p5 = clamp(p4 + half, 0.68, 0.84);
 
   const sc = s.phaseScales || [1, 1, 1, 1, 1, 1];
+  const po = s.phaseDiscOut || [0, 0, 24, 67, 67, 67];
+  const outAt = (i) => clamp((po[i] ?? 0) / 100, 0, 1);
+
   const ps =
     s.phasePos || [
       [0, 0],
@@ -197,43 +202,44 @@ function seq(p, s) {
     lerp(ps[i]?.[1] || 0, ps[j]?.[1] || 0, t),
   ];
 
-  let out = 0;
+  let out = outAt(0);
   let ang = 0;
   let z = sc[0];
   let pos = ps[0] || [0, 0];
 
   if (p < p1) {
     const t = ease(map01(p, 0, p1));
+    out = lerp(outAt(0), outAt(1), t);
     z = lerp(sc[0], sc[1], t);
     pos = mix(0, 1, t);
   } else if (p < p2) {
     const t = ease(map01(p, p1, p2));
-    out = 0.24 * t;
+    out = lerp(outAt(1), outAt(2), t);
     z = lerp(sc[1], sc[2], t);
     pos = mix(1, 2, t);
   } else if (p < p3) {
     const t = map01(p, p2, p3);
     const e = ease(t);
-    out = 0.24 + (0.67 - 0.24) * e;
+    out = lerp(outAt(2), outAt(3), e);
     ang = Math.PI * t;
     z = lerp(sc[2], sc[3], e);
     pos = mix(2, 3, e);
   } else if (p < p4) {
     const t = ease(map01(p, p3, p4));
-    out = 0.67;
+    out = lerp(outAt(3), outAt(4), t);
     ang = Math.PI;
     z = lerp(sc[3], sc[4], t);
     pos = mix(3, 4, t);
   } else if (p < p5) {
     const t = map01(p, p4, p5);
     const e = ease(t);
-    out = 0.67;
+    out = lerp(outAt(4), outAt(5), e);
     ang = Math.PI + Math.PI * t;
     z = lerp(sc[4], sc[5], e);
     pos = mix(4, 5, e);
   } else {
     const t = ease(map01(p, p5, 1));
-    out = 0.67 * (1 - t);
+    out = lerp(outAt(5), outAt(0), t);
     ang = Math.PI * 2;
     z = lerp(sc[5], sc[0], t);
     pos = mix(5, 0, t);
@@ -249,7 +255,6 @@ function seq(p, s) {
     y: Math.sin(p * Math.PI * 2) * 10,
   };
 }
-
 function drawBg(ctx, s, img, t) {
   const { w, h } = getOut(s.format);
 
@@ -833,10 +838,14 @@ export default function VinylMockupAnimator() {
   const [url, setUrl] = useState("");
   const [rec, setRec] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [exportFormat, setExportFormat] = useState("mp4");
 
   const canRec = useMemo(() => typeof MediaRecorder !== "undefined", []);
 
   const out = getOut(s.format);
+  const mp4Types = ["video/mp4;codecs=h264", "video/mp4;codecs=avc1.42E01E", "video/mp4"];
+  const webmTypes = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+  const pickMime = (types) => types.find((t) => MediaRecorder.isTypeSupported(t)) || "";
 
   const up = (k, v) => setS((o) => ({ ...o, [k]: v }));
   const upSrc = (k, v) => setSrc((o) => ({ ...o, [k]: v }));
@@ -928,7 +937,7 @@ export default function VinylMockupAnimator() {
     const a = document.createElement("a");
 
     a.href = u;
-    a.download = "vinyl-product-loop.webm";
+    a.download = `vinyl-product-loop.${exportFormat}`;
 
     document.body.appendChild(a);
     a.click();
@@ -946,10 +955,18 @@ export default function VinylMockupAnimator() {
     setRec(true);
 
     const stream = c.captureStream(FPS);
-    const type =
-      ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((t) =>
-        MediaRecorder.isTypeSupported(t)
-      ) || "video/webm";
+    const type = exportFormat === "mp4" ? pickMime(mp4Types) : pickMime(webmTypes);
+
+    if (!type) {
+      stream.getTracks().forEach((t) => t.stop());
+      setRec(false);
+      alert(
+        exportFormat === "mp4"
+          ? "Votre navigateur ne permet pas l’export MP4 via MediaRecorder. Essayez Safari, Edge/Chrome récent, ou utilisez l’export WebM."
+          : "Votre navigateur ne permet pas l’export WebM via MediaRecorder."
+      );
+      return;
+    }
 
     const mr = new MediaRecorder(stream, { mimeType: type });
 
@@ -1252,6 +1269,32 @@ export default function VinylMockupAnimator() {
               </div>
 
               <div className="rounded-2xl border border-neutral-200 bg-white p-3">
+                <div className="mb-3 text-sm font-semibold">Extraction du disque par phase</div>
+
+                <div className="grid gap-4">
+                  {(s.phaseDiscOut || [0, 0, 24, 67, 67, 67]).map((v, i) => (
+                    <Range
+                      key={i}
+                      label={`Phase ${i + 1}`}
+                      value={v}
+                      min="0"
+                      max="100"
+                      step="1"
+                      suffix="%"
+                      set={(val) =>
+                        up(
+                          "phaseDiscOut",
+                          (s.phaseDiscOut || [0, 0, 24, 67, 67, 67]).map((x, j) =>
+                            j === i ? val : x
+                          )
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-neutral-200 bg-white p-3">
                 <div className="mb-3 text-sm font-semibold">Position par phase — X / Y</div>
 
                 <div className="grid gap-4">
@@ -1422,13 +1465,25 @@ export default function VinylMockupAnimator() {
 
           <Sec n="5" title="Export">
             <div className="grid gap-3">
+              <label className="grid gap-2 text-sm font-medium text-neutral-800">
+                Format de téléchargement
+                <select
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value)}
+                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
+                >
+                  <option value="mp4">MP4</option>
+                  <option value="webm">WebM</option>
+                </select>
+              </label>
+
               <button
                 type="button"
                 disabled={!canRec || rec}
                 onClick={exportVideo}
                 className="rounded-2xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {rec ? `Export — ${progress}%` : "Exporter la boucle vidéo"}
+                {rec ? `Export — ${progress}%` : `Exporter la boucle vidéo ${exportFormat.toUpperCase()}`}
               </button>
 
               {rec && (
