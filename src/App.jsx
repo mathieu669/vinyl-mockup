@@ -3,17 +3,25 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 /* -----------------------------
    RENDER ENGINE
 ----------------------------- */
-const OUT = { w: 1080, h: 1920, fps: 30 };
+const FPS = 30;
+const FORMATS = {
+  "9:16": { w: 1080, h: 1920 },
+  "16:9": { w: 1920, h: 1080 },
+  "4:3": { w: 1600, h: 1200 },
+  "1:1": { w: 1080, h: 1080 },
+};
+const getOut = (format = "9:16") => FORMATS[format] || FORMATS["9:16"];
 
 const BASE = {
   mode: "reveal",
+  format: "9:16",
   duration: 7,
   scale: 1,
   discSpin: 1.4,
   revSpeed: 1,
   bgMode: "gradient",
-  bgA: "#f4efe7",
-  bgB: "#1a2230",
+  bgA: "#ffffff",
+  bgB: "#ffffff",
   floor: true,
   badge: true,
   safe: false,
@@ -22,7 +30,6 @@ const BASE = {
   blockRot: 0,
   shadowA: 0.28,
   sleeveDepth: 18,
-  sleeveTexture: 0.08,
   sleeveVignette: 0.18,
   phaseScales: [1, 1, 1, 1, 1, 1],
   phasePos: [
@@ -244,12 +251,7 @@ function seq(p, s) {
 }
 
 function drawBg(ctx, s, img, t) {
-  const { w, h } = OUT;
-  const g = ctx.createLinearGradient(0, 0, w, h);
-  g.addColorStop(0, s.bgA);
-  g.addColorStop(1, s.bgB);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
+  const { w, h } = getOut(s.format);
 
   if (s.bgMode === "image" && img) {
     fit(ctx, img, 0, 0, w, h);
@@ -258,25 +260,16 @@ function drawBg(ctx, s, img, t) {
     o.addColorStop(1, "rgba(0,0,0,.28)");
     ctx.fillStyle = o;
     ctx.fillRect(0, 0, w, h);
+  } else if (s.bgA === s.bgB) {
+    ctx.fillStyle = s.bgA;
+    ctx.fillRect(0, 0, w, h);
+  } else {
+    const g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, s.bgA);
+    g.addColorStop(1, s.bgB);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
   }
-
-  ctx.save();
-  ctx.globalAlpha = s.bgMode === "image" ? 0.05 : 0.12;
-
-  for (let i = 0; i < 10; i++) {
-    const x = ((i * 290 + t * 16) % (w + 480)) - 240;
-    const y = (i * 190) % h;
-    const r = 90 + (i % 3) * 35;
-    const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
-    gr.addColorStop(0, "rgba(255,255,255,.95)");
-    gr.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = gr;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
 
   if (s.floor) {
     const f = ctx.createLinearGradient(0, h * 0.58, 0, h);
@@ -384,74 +377,6 @@ function spine(
   ctx.restore();
 }
 
-const SLEEVE_TEX = new Map();
-
-function makeSleeveTexturePattern(amount = 0.08) {
-  const key = amount.toFixed(3);
-  if (SLEEVE_TEX.has(key)) return SLEEVE_TEX.get(key);
-
-  const c = document.createElement("canvas");
-  c.width = c.height = 180;
-  const x = c.getContext("2d");
-
-  let seed = 1337;
-  const rnd = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-
-  x.clearRect(0, 0, c.width, c.height);
-  const passes = 240;
-
-  for (let i = 0; i < passes; i++) {
-    const px = rnd() * c.width;
-    const py = rnd() * c.height;
-    const len = 2 + rnd() * 5;
-    const ang = (rnd() - 0.5) * 1.4;
-    const dx = Math.cos(ang) * len;
-    const dy = Math.sin(ang) * len * 0.35;
-
-    x.lineCap = 'round';
-    x.lineWidth = 0.5 + rnd() * 0.9;
-
-    x.strokeStyle = `rgba(255,255,255,${0.015 + amount * 0.18})`;
-    x.beginPath();
-    x.moveTo(px, py);
-    x.lineTo(px + dx, py + dy);
-    x.stroke();
-
-    x.strokeStyle = `rgba(0,0,0,${0.012 + amount * 0.16})`;
-    x.beginPath();
-    x.moveTo(px + 0.8, py + 0.8);
-    x.lineTo(px + dx + 0.8, py + dy + 0.8);
-    x.stroke();
-  }
-
-  for (let i = 0; i < 180; i++) {
-    const px = rnd() * c.width;
-    const py = rnd() * c.height;
-    const r = 0.3 + rnd() * 0.8;
-    x.fillStyle = `rgba(255,255,255,${0.008 + amount * 0.08})`;
-    x.beginPath();
-    x.arc(px, py, r, 0, Math.PI * 2);
-    x.fill();
-  }
-
-  SLEEVE_TEX.set(key, c);
-  return c;
-}
-
-function applySleeveTexture(ctx, x, y, n, amount = 0.08) {
-  if (amount <= 0) return;
-  const tex = makeSleeveTexturePattern(amount);
-
-  ctx.save();
-  ctx.globalAlpha = Math.min(0.45, 0.18 + amount * 0.9);
-  ctx.fillStyle = ctx.createPattern(tex, 'repeat');
-  ctx.fillRect(x, y, n, n);
-  ctx.restore();
-}
-
 function applySleeveVignette(ctx, x, y, n, amount = 0.18) {
   if (amount <= 0) return;
 
@@ -491,7 +416,6 @@ function sleeve(ctx, img, x, y, n, label, s, p, hue = 215) {
     ctx.fillText(label, x + n / 2, y + n / 2);
   }
 
-  applySleeveTexture(ctx, x, y, n, s.sleeveTexture ?? 0.08);
   applySleeveVignette(ctx, x, y, n, s.sleeveVignette ?? 0.18);
   sweep(ctx, x, y, n, s, p);
   ctx.restore();
@@ -704,7 +628,7 @@ function coverOnly(ctx, a, cx, cy, n, p, s) {
 function badge(ctx, s) {
   if (!s.badge) return;
 
-  const { w, h } = OUT;
+  const { w, h } = getOut(s.format);
   const x = w * 0.11;
   const y = h * 0.075;
   const bw = w * 0.78;
@@ -730,7 +654,7 @@ function badge(ctx, s) {
 function scene(ctx, a, s, t) {
   const p = (t / s.duration) % 1;
   const n = s.scale * 560;
-  const { w, h } = OUT;
+  const { w, h } = getOut(s.format);
 
   drawBg(ctx, s, a.bg, t);
 
@@ -912,6 +836,8 @@ export default function VinylMockupAnimator() {
 
   const canRec = useMemo(() => typeof MediaRecorder !== "undefined", []);
 
+  const out = getOut(s.format);
+
   const up = (k, v) => setS((o) => ({ ...o, [k]: v }));
   const upSrc = (k, v) => setSrc((o) => ({ ...o, [k]: v }));
 
@@ -966,8 +892,9 @@ export default function VinylMockupAnimator() {
     const ctx = c?.getContext("2d");
     if (!ctx) return;
 
-    c.width = OUT.w;
-    c.height = OUT.h;
+    const out = getOut(s.format);
+    c.width = out.w;
+    c.height = out.h;
 
     let f;
     const start = performance.now();
@@ -1018,7 +945,7 @@ export default function VinylMockupAnimator() {
     chunks.current = [];
     setRec(true);
 
-    const stream = c.captureStream(OUT.fps);
+    const stream = c.captureStream(FPS);
     const type =
       ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((t) =>
         MediaRecorder.isTypeSupported(t)
@@ -1068,8 +995,8 @@ export default function VinylMockupAnimator() {
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs text-neutral-400">
-            <span className="rounded-full border border-white/10 px-3 py-1">9:16</span>
-            <span className="rounded-full border border-white/10 px-3 py-1">1080 × 1920</span>
+            <span className="rounded-full border border-white/10 px-3 py-1">{s.format}</span>
+            <span className="rounded-full border border-white/10 px-3 py-1">{out.w} × {out.h}</span>
             <span className="rounded-full border border-white/10 px-3 py-1">{s.duration}s</span>
             <span className="rounded-full border border-white/10 px-3 py-1">
               {Object.values(src).filter(Boolean).length}/5 fichiers
@@ -1238,6 +1165,20 @@ export default function VinylMockupAnimator() {
                 </select>
               </label>
 
+              <label className="grid gap-2 text-sm font-medium text-neutral-800">
+                Format
+                <select
+                  value={s.format}
+                  onChange={(e) => up("format", e.target.value)}
+                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
+                >
+                  <option value="9:16">9:16 — portrait</option>
+                  <option value="16:9">16:9 — paysage</option>
+                  <option value="4:3">4:3</option>
+                  <option value="1:1">1:1 — carré</option>
+                </select>
+              </label>
+
               <div className="grid grid-cols-2 gap-3">
                 <Text label="Durée" value={s.duration} set={(v) => up("duration", Number(v))} />
                 <Text label="Échelle" value={s.scale} set={(v) => up("scale", Number(v))} />
@@ -1278,15 +1219,6 @@ export default function VinylMockupAnimator() {
                 max="0.6"
                 step="0.02"
                 set={(v) => up("shadowA", v)}
-              />
-
-              <Range
-                label="Texture cartonnée"
-                value={s.sleeveTexture ?? 0.08}
-                min="0"
-                max="0.25"
-                step="0.01"
-                set={(v) => up("sleeveTexture", v)}
               />
 
               <Range
@@ -1541,11 +1473,14 @@ export default function VinylMockupAnimator() {
             </div>
 
             <div className="grid min-h-0 flex-1 place-items-center rounded-[1.5rem] bg-[radial-gradient(circle_at_top,#343434,transparent_40%),#070707] p-3 md:p-6">
-              <div className="relative w-full max-w-[440px] overflow-hidden rounded-[2rem] bg-black shadow-2xl ring-1 ring-white/10">
-                <canvas ref={canvas} className="block aspect-[9/16] w-full" />
+              <div
+                className="relative w-full max-w-[440px] overflow-hidden rounded-[2rem] bg-black shadow-2xl ring-1 ring-white/10"
+                style={{ aspectRatio: `${out.w} / ${out.h}` }}
+              >
+                <canvas ref={canvas} className="block h-full w-full" />
 
                 <div className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-black/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75 backdrop-blur">
-                  1080 × 1920 · loop preview
+                  {out.w} × {out.h} · {s.format} · loop preview
                 </div>
               </div>
             </div>
