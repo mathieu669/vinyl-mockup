@@ -16,6 +16,8 @@ const BASE = {
   mode: "reveal",
   format: "9:16",
   duration: 7,
+  playbackMode: "loop",
+  loopRepeats: 1,
   scale: 1,
   discSpin: 1.4,
   revSpeed: 1,
@@ -909,7 +911,14 @@ export default function VinylMockupAnimator() {
     const start = performance.now();
 
     const loop = (now) => {
-      scene(ctx, imgs, s, ((now - start) / 1000) % s.duration);
+      const elapsed = (now - start) / 1000;
+      const t = s.playbackMode === "single"
+        ? Math.min(elapsed, s.duration)
+        : elapsed % s.duration;
+
+      scene(ctx, imgs, s, t);
+
+      if (s.playbackMode === "single" && elapsed >= s.duration) return;
       f = requestAnimationFrame(loop);
     };
 
@@ -983,7 +992,9 @@ export default function VinylMockupAnimator() {
     mr.start();
 
     const start = performance.now();
-    const dur = s.duration * 1000;
+    const repeatCount =
+      s.playbackMode === "loop" ? Math.max(1, Math.floor(Number(s.loopRepeats) || 1)) : 1;
+    const dur = s.duration * repeatCount * 1000;
 
     const int = setInterval(() => {
       const p = Math.min(100, ((performance.now() - start) / dur) * 100);
@@ -1195,6 +1206,34 @@ export default function VinylMockupAnimator() {
                   <option value="1:1">1:1 — carré</option>
                 </select>
               </label>
+
+              <label className="grid gap-2 text-sm font-medium text-neutral-800">
+                Lecture de l’animation
+                <select
+                  value={s.playbackMode ?? "loop"}
+                  onChange={(e) => up("playbackMode", e.target.value)}
+                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
+                >
+                  <option value="single">Lecture unique — sans boucle</option>
+                  <option value="loop">Animation en boucle</option>
+                </select>
+              </label>
+
+              {(s.playbackMode ?? "loop") === "loop" && (
+                <label className="grid gap-2 text-sm font-medium text-neutral-800">
+                  Répéter n fois
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={s.loopRepeats ?? 1}
+                    onChange={(e) =>
+                      up("loopRepeats", Math.max(1, Math.floor(Number(e.target.value) || 1)))
+                    }
+                    className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10"
+                  />
+                </label>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <Text label="Durée" value={s.duration} set={(v) => up("duration", Number(v))} />
@@ -1483,7 +1522,7 @@ export default function VinylMockupAnimator() {
                 onClick={exportVideo}
                 className="rounded-2xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {rec ? `Export — ${progress}%` : `Exporter la boucle vidéo ${exportFormat.toUpperCase()}`}
+                {rec ? `Export — ${progress}%` : `Exporter l’animation ${exportFormat.toUpperCase()}`}
               </button>
 
               {rec && (
