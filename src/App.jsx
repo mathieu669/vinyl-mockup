@@ -184,8 +184,7 @@ function normalizeStyledText(text, uppercase = false) {
 }
 
 function getTextLines(text, uppercase = false) {
-  return normalizeStyledText(text, uppercase).split(/
-/g);
+  return normalizeStyledText(text, uppercase).split("\n");
 }
 
 function measureTextWithLetterSpacing(ctx, text, letterSpacing = 0) {
