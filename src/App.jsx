@@ -34,10 +34,9 @@ const BASE = {
   sleeveDepth: 18,
   sleeveVignette: 0.18,
   labelScale: 1.2,
-  phaseDiscOut: [0, 0, 24, 67, 67, 67],
-  phaseScales: [1, 1, 1, 1, 1, 1],
+  phaseDiscOut: [0, 24, 67, 67, 0],
+  phaseScales: [1, 1, 1, 1, 1],
   phasePos: [
-    [0, 0],
     [0, 0],
     [0, 0],
     [0, 0],
@@ -72,7 +71,7 @@ const PRESETS = [
       title: "LIMITED EDITION",
       subtitle: "Full album rotation",
       blockRot: -8,
-      phaseScales: [0.96, 1, 1.04, 1.05, 1.02, 0.98],
+      phaseScales: [0.96, 1.04, 1.05, 1.02, 0.98],
     },
   },
   {
@@ -94,11 +93,32 @@ const PRESETS = [
 
 const PROFILE_KEY = "vinylMockupProfilesV1";
 
+const PHASE_LABELS = [
+  "#1 – recto",
+  "#2 - révolution",
+  "#3 - verso",
+  "#4 - révolution",
+  "#5 - recto final",
+];
+
+const cleanPhaseArray = (value, fallback) => {
+  const source = Array.isArray(value) ? value : fallback;
+  return fallback.map((v, i) => (source[i] ?? v));
+};
+
+const cleanPhasePos = (value, fallback) => {
+  const source = Array.isArray(value) ? value : fallback;
+  return fallback.map((v, i) => {
+    const p = source[i] || v;
+    return [p?.[0] ?? v[0], p?.[1] ?? v[1]];
+  });
+};
+
 const cleanSettings = (o) => ({
   ...o,
-  phaseScales: [...(o.phaseScales || BASE.phaseScales)],
-  phaseDiscOut: [...(o.phaseDiscOut || BASE.phaseDiscOut)],
-  phasePos: (o.phasePos || BASE.phasePos).map((p) => [p[0], p[1]]),
+  phaseScales: cleanPhaseArray(o.phaseScales, BASE.phaseScales),
+  phaseDiscOut: cleanPhaseArray(o.phaseDiscOut, BASE.phaseDiscOut),
+  phasePos: cleanPhasePos(o.phasePos, BASE.phasePos),
 });
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
@@ -177,28 +197,18 @@ function domCol(img, hue = 215) {
 }
 
 function seq(p, s) {
-  const p1 = 0.14;
-  const p2 = 0.28;
+  const p1 = 0.24;
+  const p2 = 0.44;
   const half = 0.2 / Math.max(0.7, s.revSpeed);
-  const p3 = clamp(p2 + half, 0.4, 0.52);
-  const p4 = clamp(p3 + 0.08, 0.48, 0.62);
-  const p5 = clamp(p4 + half, 0.68, 0.84);
+  const p3 = clamp(p2 + half, 0.58, 0.72);
+  const p4 = clamp(p3 + 0.16, 0.76, 0.9);
 
-  const sc = s.phaseScales || [1, 1, 1, 1, 1, 1];
-  const po = s.phaseDiscOut || [0, 0, 24, 67, 67, 67];
+  const sc = cleanPhaseArray(s.phaseScales, BASE.phaseScales);
+  const po = cleanPhaseArray(s.phaseDiscOut, BASE.phaseDiscOut);
+  const ps = cleanPhasePos(s.phasePos, BASE.phasePos);
+
   const outAt = (i) => clamp((po[i] ?? 0) / 100, 0, 1);
-
-  const ps =
-    s.phasePos || [
-      [0, 0],
-      [0, 0],
-      [0, 0],
-      [0, 0],
-      [0, 0],
-      [0, 0],
-    ];
-
-  const spin = Math.max(0, p - p1) * Math.PI * 2 * 3.2 * s.discSpin;
+  const spin = Math.max(0, p) * Math.PI * 2 * 3.2 * s.discSpin;
 
   const mix = (i, j, t) => [
     lerp(ps[i]?.[0] || 0, ps[j]?.[0] || 0, t),
@@ -213,39 +223,33 @@ function seq(p, s) {
   if (p < p1) {
     const t = ease(map01(p, 0, p1));
     out = lerp(outAt(0), outAt(1), t);
+    ang = Math.PI * t;
     z = lerp(sc[0], sc[1], t);
     pos = mix(0, 1, t);
   } else if (p < p2) {
     const t = ease(map01(p, p1, p2));
     out = lerp(outAt(1), outAt(2), t);
+    ang = Math.PI;
     z = lerp(sc[1], sc[2], t);
     pos = mix(1, 2, t);
   } else if (p < p3) {
-    const t = map01(p, p2, p3);
-    const e = ease(t);
-    out = lerp(outAt(2), outAt(3), e);
-    ang = Math.PI * t;
-    z = lerp(sc[2], sc[3], e);
-    pos = mix(2, 3, e);
+    const t = ease(map01(p, p2, p3));
+    out = lerp(outAt(2), outAt(3), t);
+    ang = Math.PI + Math.PI * t;
+    z = lerp(sc[2], sc[3], t);
+    pos = mix(2, 3, t);
   } else if (p < p4) {
     const t = ease(map01(p, p3, p4));
     out = lerp(outAt(3), outAt(4), t);
-    ang = Math.PI;
+    ang = Math.PI * 2;
     z = lerp(sc[3], sc[4], t);
     pos = mix(3, 4, t);
-  } else if (p < p5) {
-    const t = map01(p, p4, p5);
-    const e = ease(t);
-    out = lerp(outAt(4), outAt(5), e);
-    ang = Math.PI + Math.PI * t;
-    z = lerp(sc[4], sc[5], e);
-    pos = mix(4, 5, e);
   } else {
-    const t = ease(map01(p, p5, 1));
-    out = lerp(outAt(5), outAt(0), t);
+    const t = ease(map01(p, p4, 1));
+    out = lerp(outAt(4), outAt(0), t);
     ang = Math.PI * 2;
-    z = lerp(sc[5], sc[0], t);
-    pos = mix(5, 0, t);
+    z = lerp(sc[4], sc[0], t);
+    pos = mix(4, 0, t);
   }
 
   return {
@@ -312,6 +316,12 @@ function sweep(ctx, x, y, n, s, p) {
   const cx = -travel / 2 + travel * (((p * s.sweepS) % 1 + 1) % 1);
 
   ctx.save();
+
+  // Reflet strictement circonscrit au cadre visible de la pochette.
+  ctx.beginPath();
+  ctx.rect(x, y, n, n);
+  ctx.clip();
+
   ctx.translate(x + n / 2, y + n / 2);
   ctx.rotate(a);
   ctx.globalCompositeOperation = "screen";
@@ -325,7 +335,6 @@ function sweep(ctx, x, y, n, s, p) {
   ctx.fillRect(-n * 1.6, -n * 1.6, n * 3.2, n * 3.2);
   ctx.restore();
 }
-
 function spine(
   ctx,
   img,
@@ -1305,16 +1314,18 @@ export default function VinylMockupAnimator() {
                 <div className="mb-3 text-sm font-semibold">Échelle par phase</div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {s.phaseScales.map((v, i) => (
+                  {cleanPhaseArray(s.phaseScales, BASE.phaseScales).map((v, i) => (
                     <Num
                       key={i}
-                      label={`Phase ${i + 1}`}
+                      label={PHASE_LABELS[i]}
                       value={v}
                       step={0.5}
                       set={(val) =>
                         up(
                           "phaseScales",
-                          s.phaseScales.map((x, j) => (j === i ? val : x))
+                          cleanPhaseArray(s.phaseScales, BASE.phaseScales).map((x, j) =>
+                            j === i ? val : x
+                          )
                         )
                       }
                     />
@@ -1326,10 +1337,10 @@ export default function VinylMockupAnimator() {
                 <div className="mb-3 text-sm font-semibold">Extraction du disque par phase</div>
 
                 <div className="grid gap-4">
-                  {(s.phaseDiscOut || [0, 0, 24, 67, 67, 67]).map((v, i) => (
+                  {cleanPhaseArray(s.phaseDiscOut, BASE.phaseDiscOut).map((v, i) => (
                     <Range
                       key={i}
-                      label={`Phase ${i + 1}`}
+                      label={PHASE_LABELS[i]}
                       value={v}
                       min="0"
                       max="100"
@@ -1338,7 +1349,7 @@ export default function VinylMockupAnimator() {
                       set={(val) =>
                         up(
                           "phaseDiscOut",
-                          (s.phaseDiscOut || [0, 0, 24, 67, 67, 67]).map((x, j) =>
+                          cleanPhaseArray(s.phaseDiscOut, BASE.phaseDiscOut).map((x, j) =>
                             j === i ? val : x
                           )
                         )
@@ -1352,17 +1363,10 @@ export default function VinylMockupAnimator() {
                 <div className="mb-3 text-sm font-semibold">Position par phase — X / Y</div>
 
                 <div className="grid gap-4">
-                  {(s.phasePos || [
-                    [0, 0],
-                    [0, 0],
-                    [0, 0],
-                    [0, 0],
-                    [0, 0],
-                    [0, 0],
-                  ]).map((v, i) => (
+                  {cleanPhasePos(s.phasePos, BASE.phasePos).map((v, i) => (
                     <div key={i} className="grid gap-2">
                       <div className="text-xs font-semibold text-neutral-500">
-                        Phase {i + 1}
+                        {PHASE_LABELS[i]}
                       </div>
 
                       <Range
@@ -1374,14 +1378,9 @@ export default function VinylMockupAnimator() {
                         set={(val) =>
                           up(
                             "phasePos",
-                            (s.phasePos || [
-                              [0, 0],
-                              [0, 0],
-                              [0, 0],
-                              [0, 0],
-                              [0, 0],
-                              [0, 0],
-                            ]).map((p, j) => (j === i ? [val, p[1]] : p))
+                            cleanPhasePos(s.phasePos, BASE.phasePos).map((p, j) =>
+                              j === i ? [val, p[1]] : p
+                            )
                           )
                         }
                       />
@@ -1395,14 +1394,9 @@ export default function VinylMockupAnimator() {
                         set={(val) =>
                           up(
                             "phasePos",
-                            (s.phasePos || [
-                              [0, 0],
-                              [0, 0],
-                              [0, 0],
-                              [0, 0],
-                              [0, 0],
-                              [0, 0],
-                            ]).map((p, j) => (j === i ? [p[0], val] : p))
+                            cleanPhasePos(s.phasePos, BASE.phasePos).map((p, j) =>
+                              j === i ? [p[0], val] : p
+                            )
                           )
                         }
                       />
