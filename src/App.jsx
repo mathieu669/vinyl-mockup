@@ -12,6 +12,21 @@ const FORMATS = {
 };
 const getOut = (format = "9:16") => FORMATS[format] || FORMATS["9:16"];
 
+const FONT_OPTIONS = [
+  "Inter",
+  "Montserrat",
+  "Poppins",
+  "Playfair Display",
+  "DM Serif Display",
+  "Lora",
+  "Roboto",
+  "Oswald",
+  "Bebas Neue",
+  "Raleway",
+  "Cormorant Garamond",
+  "Space Grotesk",
+];
+
 const BASE = {
   mode: "reveal",
   format: "9:16",
@@ -24,11 +39,35 @@ const BASE = {
   bgMode: "gradient",
   bgA: "#ffffff",
   bgB: "#ffffff",
+  bgReverse: false,
+  bgAngle: 135,
   floor: true,
   badge: true,
   safe: false,
   title: "NUMBERED VINYL",
   subtitle: "Product loop",
+  titleFont: "Inter",
+  subtitleFont: "Inter",
+  titleSize: 42,
+  subtitleSize: 27,
+  titleColor: "#141414",
+  subtitleColor: "#5a5a5a",
+  titleBold: true,
+  subtitleBold: false,
+  titleItalic: false,
+  subtitleItalic: false,
+  titleShadow: false,
+  subtitleShadow: false,
+  titleShadowColor: "#000000",
+  subtitleShadowColor: "#000000",
+  titleShadowBlur: 8,
+  subtitleShadowBlur: 6,
+  titleHighlight: false,
+  subtitleHighlight: false,
+  titleHighlightColor: "#fff176",
+  subtitleHighlightColor: "#fff176",
+  titleHighlightThickness: 20,
+  subtitleHighlightThickness: 14,
   blockRot: 0,
   shadowA: 0.28,
   sleeveDepth: 18,
@@ -105,6 +144,66 @@ const map01 = (v, a, b) => (b === a ? 0 : clamp((v - a) / (b - a)));
 const ease = (t) => (t < 0.5 ? 4 * t ** 3 : 1 - ((-2 * t + 2) ** 3) / 2);
 const lerp = (a, b, t) => a + (b - a) * t;
 const COL = new WeakMap();
+
+function makeAngleGradient(ctx, w, h, c1, c2, angle = 135, reverse = false) {
+  const rad = (angle * Math.PI) / 180;
+  const cx = w / 2;
+  const cy = h / 2;
+  const len = Math.sqrt(w * w + h * h);
+  const dx = Math.cos(rad) * len * 0.5;
+  const dy = Math.sin(rad) * len * 0.5;
+  const g = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
+  g.addColorStop(0, reverse ? c2 : c1);
+  g.addColorStop(1, reverse ? c1 : c2);
+  return g;
+}
+
+function setCanvasFont(ctx, family = "Inter", size = 42, bold = false, italic = false) {
+  const style = italic ? "italic " : "";
+  const weight = bold ? "700" : "400";
+  ctx.font = `${style}${weight} ${size}px "${family}", Arial`;
+}
+
+function drawStyledText(ctx, text, x, baselineY, opts = {}) {
+  if (!text) return;
+  const {
+    family = "Inter",
+    size = 42,
+    bold = false,
+    italic = false,
+    color = "#111111",
+    shadow = false,
+    shadowColor = "#000000",
+    shadowBlur = 8,
+    highlight = false,
+    highlightColor = "#fff176",
+    highlightThickness = 18,
+  } = opts;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  setCanvasFont(ctx, family, size, bold, italic);
+
+  const width = ctx.measureText(text).width;
+  if (highlight) {
+    const padX = Math.max(8, size * 0.18);
+    const h = Math.max(4, highlightThickness);
+    ctx.fillStyle = highlightColor;
+    ctx.fillRect(x - width / 2 - padX, baselineY - h * 0.82, width + padX * 2, h);
+  }
+
+  if (shadow) {
+    ctx.shadowColor = shadowColor;
+    ctx.shadowBlur = shadowBlur;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = Math.max(1, shadowBlur * 0.35);
+  }
+
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, baselineY);
+  ctx.restore();
+}
 
 function fileURL(file) {
   return new Promise((res, rej) => {
@@ -271,10 +370,7 @@ function drawBg(ctx, s, img, t) {
     ctx.fillStyle = s.bgA;
     ctx.fillRect(0, 0, w, h);
   } else {
-    const g = ctx.createLinearGradient(0, 0, w, h);
-    g.addColorStop(0, s.bgA);
-    g.addColorStop(1, s.bgB);
-    ctx.fillStyle = g;
+    ctx.fillStyle = makeAngleGradient(ctx, w, h, s.bgA, s.bgB, s.bgAngle ?? 135, !!s.bgReverse);
     ctx.fillRect(0, 0, w, h);
   }
 
@@ -639,22 +735,48 @@ function badge(ctx, s) {
   const x = w * 0.11;
   const y = h * 0.075;
   const bw = w * 0.78;
+  const titleSize = s.titleSize ?? 42;
+  const subtitleSize = s.subtitleSize ?? 27;
+  const bh = Math.max(112, titleSize + subtitleSize + 62);
+  const cx = w / 2;
+  const titleY = y + 24 + titleSize;
+  const subtitleY = titleY + Math.max(16, subtitleSize * 0.9 + 8);
 
   ctx.save();
   ctx.fillStyle = "rgba(255,255,255,.88)";
   ctx.strokeStyle = "rgba(0,0,0,.1)";
-  rr(ctx, x, y, bw, 112, 32);
+  rr(ctx, x, y, bw, bh, 32);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(0,0,0,.78)";
-  ctx.textAlign = "center";
-  ctx.font = "700 42px Inter,Arial";
-  ctx.fillText(s.title || "VINYL EDITION", w / 2, y + 50);
+  drawStyledText(ctx, s.title || "VINYL EDITION", cx, titleY, {
+    family: s.titleFont,
+    size: titleSize,
+    bold: !!s.titleBold,
+    italic: !!s.titleItalic,
+    color: s.titleColor || "#141414",
+    shadow: !!s.titleShadow,
+    shadowColor: s.titleShadowColor || "#000000",
+    shadowBlur: s.titleShadowBlur ?? 8,
+    highlight: !!s.titleHighlight,
+    highlightColor: s.titleHighlightColor || "#fff176",
+    highlightThickness: s.titleHighlightThickness ?? 20,
+  });
 
-  ctx.font = "400 27px Inter,Arial";
-  ctx.fillStyle = "rgba(0,0,0,.56)";
-  ctx.fillText(s.subtitle || "Product loop", w / 2, y + 86);
+  drawStyledText(ctx, s.subtitle || "Product loop", cx, subtitleY, {
+    family: s.subtitleFont,
+    size: subtitleSize,
+    bold: !!s.subtitleBold,
+    italic: !!s.subtitleItalic,
+    color: s.subtitleColor || "#5a5a5a",
+    shadow: !!s.subtitleShadow,
+    shadowColor: s.subtitleShadowColor || "#000000",
+    shadowBlur: s.subtitleShadowBlur ?? 6,
+    highlight: !!s.subtitleHighlight,
+    highlightColor: s.subtitleHighlightColor || "#fff176",
+    highlightThickness: s.subtitleHighlightThickness ?? 14,
+  });
+
   ctx.restore();
 }
 
@@ -813,6 +935,117 @@ function Num({ label, value, set, min = 0.5, max = 3, step = 0.5 }) {
   );
 }
 
+function FontStyleEditor({ title, textValue, onText, prefix, s, up }) {
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-3">
+      <div className="mb-3 text-sm font-semibold">{title}</div>
+      <div className="grid gap-3">
+        <Text label="Texte" value={textValue} set={onText} />
+
+        <label className="grid gap-2 text-sm font-medium text-neutral-800">
+          Police Google Fonts
+          <select
+            value={s[`${prefix}Font`] || "Inter"}
+            onChange={(e) => up(`${prefix}Font`, e.target.value)}
+            className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
+          >
+            {FONT_OPTIONS.map((font) => (
+              <option key={font} value={font}>{font}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Range
+            label="Taille"
+            value={s[`${prefix}Size`] ?? (prefix === "title" ? 42 : 27)}
+            min="12"
+            max="96"
+            step="1"
+            suffix="px"
+            set={(v) => up(`${prefix}Size`, v)}
+          />
+
+          <label className="grid gap-2 text-sm font-medium text-neutral-800">
+            Couleur du texte
+            <input
+              type="color"
+              value={s[`${prefix}Color`] || (prefix === "title" ? "#141414" : "#5a5a5a")}
+              onChange={(e) => up(`${prefix}Color`, e.target.value)}
+              className="h-11 rounded-xl border border-neutral-200 p-1"
+            />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          {[
+            [`${prefix}Bold`, "Gras"],
+            [`${prefix}Italic`, "Italique"],
+            [`${prefix}Shadow`, "Ombre portée"],
+            [`${prefix}Highlight`, "Surligné"],
+          ].map(([k, l]) => (
+            <label key={k} className="flex items-center gap-2 rounded-xl bg-neutral-50 p-3 ring-1 ring-neutral-200">
+              <input
+                type="checkbox"
+                checked={!!s[k]}
+                onChange={(e) => up(k, e.target.checked)}
+                className="accent-neutral-950"
+              />
+              {l}
+            </label>
+          ))}
+        </div>
+
+        {!!s[`${prefix}Shadow`] && (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-2 text-sm font-medium text-neutral-800">
+              Couleur de l’ombre
+              <input
+                type="color"
+                value={s[`${prefix}ShadowColor`] || "#000000"}
+                onChange={(e) => up(`${prefix}ShadowColor`, e.target.value)}
+                className="h-11 rounded-xl border border-neutral-200 p-1"
+              />
+            </label>
+            <Range
+              label="Flou de l’ombre"
+              value={s[`${prefix}ShadowBlur`] ?? (prefix === "title" ? 8 : 6)}
+              min="0"
+              max="40"
+              step="1"
+              suffix="px"
+              set={(v) => up(`${prefix}ShadowBlur`, v)}
+            />
+          </div>
+        )}
+
+        {!!s[`${prefix}Highlight`] && (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-2 text-sm font-medium text-neutral-800">
+              Couleur du surlignage
+              <input
+                type="color"
+                value={s[`${prefix}HighlightColor`] || "#fff176"}
+                onChange={(e) => up(`${prefix}HighlightColor`, e.target.value)}
+                className="h-11 rounded-xl border border-neutral-200 p-1"
+              />
+            </label>
+            <Range
+              label="Épaisseur du surlignage"
+              value={s[`${prefix}HighlightThickness`] ?? (prefix === "title" ? 20 : 14)}
+              min="2"
+              max="50"
+              step="1"
+              suffix="px"
+              set={(v) => up(`${prefix}HighlightThickness`, v)}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function VinylMockupAnimator() {
   const canvas = useRef(null);
   const chunks = useRef([]);
@@ -897,6 +1130,25 @@ export default function VinylMockupAnimator() {
       off = true;
     };
   }, [src]);
+
+  useEffect(() => {
+    const families = [...new Set([s.titleFont, s.subtitleFont].filter(Boolean))];
+    if (!families.length) return;
+
+    const id = "vinyl-google-fonts";
+    let link = document.getElementById(id);
+    if (!link) {
+      link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
+    }
+
+    const qs = families
+      .map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:ital,wght@0,400;0,700;1,400;1,700`)
+      .join("&");
+    link.href = `https://fonts.googleapis.com/css2?${qs}&display=swap`;
+  }, [s.titleFont, s.subtitleFont]);
 
   useEffect(() => {
     const c = canvas.current;
@@ -1412,30 +1664,69 @@ export default function VinylMockupAnimator() {
                 </select>
               </label>
 
-              <div className="grid grid-cols-2 gap-3">
-                <label className="grid gap-2 text-sm font-medium">
-                  Couleur A
-                  <input
-                    type="color"
-                    value={s.bgA}
-                    onChange={(e) => up("bgA", e.target.value)}
-                    className="h-11 rounded-xl border border-neutral-200 p-1"
-                  />
-                </label>
+              {s.bgMode === "gradient" && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="grid gap-2 text-sm font-medium">
+                      Couleur A
+                      <input
+                        type="color"
+                        value={s.bgA}
+                        onChange={(e) => up("bgA", e.target.value)}
+                        className="h-11 rounded-xl border border-neutral-200 p-1"
+                      />
+                    </label>
 
-                <label className="grid gap-2 text-sm font-medium">
-                  Couleur B
-                  <input
-                    type="color"
-                    value={s.bgB}
-                    onChange={(e) => up("bgB", e.target.value)}
-                    className="h-11 rounded-xl border border-neutral-200 p-1"
-                  />
-                </label>
-              </div>
+                    <label className="grid gap-2 text-sm font-medium">
+                      Couleur B
+                      <input
+                        type="color"
+                        value={s.bgB}
+                        onChange={(e) => up("bgB", e.target.value)}
+                        className="h-11 rounded-xl border border-neutral-200 p-1"
+                      />
+                    </label>
+                  </div>
 
-              <Text label="Titre" value={s.title} set={(v) => up("title", v)} />
-              <Text label="Sous-titre" value={s.subtitle} set={(v) => up("subtitle", v)} />
+                  <label className="flex items-center gap-2 rounded-xl bg-white p-3 text-sm ring-1 ring-neutral-200">
+                    <input
+                      type="checkbox"
+                      checked={!!s.bgReverse}
+                      onChange={(e) => up("bgReverse", e.target.checked)}
+                      className="accent-neutral-950"
+                    />
+                    Inverser les couleurs du dégradé
+                  </label>
+
+                  <Range
+                    label="Angle du dégradé"
+                    value={s.bgAngle ?? 135}
+                    min="0"
+                    max="360"
+                    step="1"
+                    suffix="°"
+                    set={(v) => up("bgAngle", v)}
+                  />
+                </>
+              )}
+
+              <FontStyleEditor
+                title="Titre"
+                textValue={s.title}
+                onText={(v) => up("title", v)}
+                prefix="title"
+                s={s}
+                up={up}
+              />
+
+              <FontStyleEditor
+                title="Sous-titre"
+                textValue={s.subtitle}
+                onText={(v) => up("subtitle", v)}
+                prefix="subtitle"
+                s={s}
+                up={up}
+              />
 
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {[
