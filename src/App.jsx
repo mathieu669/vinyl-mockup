@@ -68,6 +68,20 @@ const BASE = {
   subtitleHighlightColor: "#fff176",
   titleHighlightThickness: 20,
   subtitleHighlightThickness: 14,
+  titleAlign: "center",
+  subtitleAlign: "center",
+  titleUppercase: false,
+  subtitleUppercase: false,
+  titleLetterSpacing: 0,
+  subtitleLetterSpacing: 0,
+  titleLineHeight: 1.12,
+  subtitleLineHeight: 1.12,
+  titleStroke: false,
+  subtitleStroke: false,
+  titleStrokeColor: "#000000",
+  subtitleStrokeColor: "#000000",
+  titleStrokeWidth: 2,
+  subtitleStrokeWidth: 1,
   blockRot: 0,
   shadowA: 0.28,
   sleeveDepth: 18,
@@ -164,6 +178,46 @@ function setCanvasFont(ctx, family = "Inter", size = 42, bold = false, italic = 
   ctx.font = `${style}${weight} ${size}px "${family}", Arial`;
 }
 
+function normalizeStyledText(text, uppercase = false) {
+  const v = String(text ?? "");
+  return uppercase ? v.toUpperCase() : v;
+}
+
+function getTextLines(text, uppercase = false) {
+  return normalizeStyledText(text, uppercase).split(/
+/g);
+}
+
+function measureTextWithLetterSpacing(ctx, text, letterSpacing = 0) {
+  if (!text) return 0;
+  if (!letterSpacing) return ctx.measureText(text).width;
+  const chars = Array.from(text);
+  return chars.reduce((sum, ch, i) => sum + ctx.measureText(ch).width + (i < chars.length - 1 ? letterSpacing : 0), 0);
+}
+
+function getTextBlockHeight(text, opts = {}) {
+  const lines = getTextLines(text, !!opts.uppercase);
+  const size = opts.size ?? 42;
+  const lineHeight = opts.lineHeight ?? 1.12;
+  return Math.max(1, lines.length) * size + Math.max(0, lines.length - 1) * size * (lineHeight - 1);
+}
+
+function drawSpacedTextLine(ctx, text, x, y, fill = true, stroke = false, letterSpacing = 0) {
+  if (!text) return;
+  if (!letterSpacing) {
+    if (stroke) ctx.strokeText(text, x, y);
+    if (fill) ctx.fillText(text, x, y);
+    return;
+  }
+
+  let cursor = x;
+  for (const ch of Array.from(text)) {
+    if (stroke) ctx.strokeText(ch, cursor, y);
+    if (fill) ctx.fillText(ch, cursor, y);
+    cursor += ctx.measureText(ch).width + letterSpacing;
+  }
+}
+
 function drawStyledText(ctx, text, x, baselineY, opts = {}) {
   if (!text) return;
   const {
@@ -172,36 +226,63 @@ function drawStyledText(ctx, text, x, baselineY, opts = {}) {
     bold = false,
     italic = false,
     color = "#111111",
+    align = "center",
+    uppercase = false,
+    letterSpacing = 0,
+    lineHeight = 1.12,
     shadow = false,
     shadowColor = "#000000",
     shadowBlur = 8,
     highlight = false,
     highlightColor = "#fff176",
     highlightThickness = 18,
+    stroke = false,
+    strokeColor = "#000000",
+    strokeWidth = 2,
   } = opts;
 
+  const lines = getTextLines(text, uppercase);
+
   ctx.save();
-  ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
   setCanvasFont(ctx, family, size, bold, italic);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.lineWidth = strokeWidth;
 
-  const width = ctx.measureText(text).width;
-  if (highlight) {
-    const padX = Math.max(8, size * 0.18);
-    const h = Math.max(4, highlightThickness);
-    ctx.fillStyle = highlightColor;
-    ctx.fillRect(x - width / 2 - padX, baselineY - h * 0.82, width + padX * 2, h);
-  }
+  const widths = lines.map((line) => measureTextWithLetterSpacing(ctx, line, letterSpacing));
 
-  if (shadow) {
-    ctx.shadowColor = shadowColor;
-    ctx.shadowBlur = shadowBlur;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = Math.max(1, shadowBlur * 0.35);
-  }
+  lines.forEach((line, i) => {
+    const width = widths[i];
+    const y = baselineY + i * size * lineHeight;
+    const drawX = align === "left" ? x : align === "right" ? x - width : x - width / 2;
 
-  ctx.fillStyle = color;
-  ctx.fillText(text, x, baselineY);
+    if (highlight) {
+      const padX = Math.max(8, size * 0.18);
+      const h = Math.max(4, highlightThickness);
+      ctx.save();
+      ctx.fillStyle = highlightColor;
+      ctx.fillRect(drawX - padX, y - h * 0.82, width + padX * 2, h);
+      ctx.restore();
+    }
+
+    ctx.save();
+    if (shadow) {
+      ctx.shadowColor = shadowColor;
+      ctx.shadowBlur = shadowBlur;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = Math.max(1, shadowBlur * 0.35);
+    }
+    if (stroke) {
+      ctx.strokeStyle = strokeColor;
+      drawSpacedTextLine(ctx, line, drawX, y, false, true, letterSpacing);
+    }
+    ctx.fillStyle = color;
+    drawSpacedTextLine(ctx, line, drawX, y, true, false, letterSpacing);
+    ctx.restore();
+  });
+
   ctx.restore();
 }
 
@@ -735,12 +816,32 @@ function badge(ctx, s) {
   const x = w * 0.11;
   const y = h * 0.075;
   const bw = w * 0.78;
+  const innerPadX = 30;
+  const innerLeft = x + innerPadX;
+  const innerRight = x + bw - innerPadX;
+  const innerCenter = x + bw / 2;
+
   const titleSize = s.titleSize ?? 42;
   const subtitleSize = s.subtitleSize ?? 27;
-  const bh = Math.max(112, titleSize + subtitleSize + 62);
-  const cx = w / 2;
-  const titleY = y + 24 + titleSize;
-  const subtitleY = titleY + Math.max(16, subtitleSize * 0.9 + 8);
+  const titleBlockH = getTextBlockHeight(s.title || "VINYL EDITION", {
+    size: titleSize,
+    lineHeight: s.titleLineHeight ?? 1.12,
+    uppercase: !!s.titleUppercase,
+  });
+  const subtitleBlockH = getTextBlockHeight(s.subtitle || "Product loop", {
+    size: subtitleSize,
+    lineHeight: s.subtitleLineHeight ?? 1.12,
+    uppercase: !!s.subtitleUppercase,
+  });
+
+  const topPad = 24;
+  const gap = 16;
+  const bottomPad = 24;
+  const bh = Math.max(112, topPad + titleBlockH + gap + subtitleBlockH + bottomPad);
+
+  const posX = (align) => (align === "left" ? innerLeft : align === "right" ? innerRight : innerCenter);
+  const titleY = y + topPad + titleSize;
+  const subtitleY = y + topPad + titleBlockH + gap + subtitleSize;
 
   ctx.save();
   ctx.fillStyle = "rgba(255,255,255,.88)";
@@ -749,32 +850,46 @@ function badge(ctx, s) {
   ctx.fill();
   ctx.stroke();
 
-  drawStyledText(ctx, s.title || "VINYL EDITION", cx, titleY, {
+  drawStyledText(ctx, s.title || "VINYL EDITION", posX(s.titleAlign || "center"), titleY, {
     family: s.titleFont,
     size: titleSize,
     bold: !!s.titleBold,
     italic: !!s.titleItalic,
     color: s.titleColor || "#141414",
+    align: s.titleAlign || "center",
+    uppercase: !!s.titleUppercase,
+    letterSpacing: s.titleLetterSpacing ?? 0,
+    lineHeight: s.titleLineHeight ?? 1.12,
     shadow: !!s.titleShadow,
     shadowColor: s.titleShadowColor || "#000000",
     shadowBlur: s.titleShadowBlur ?? 8,
     highlight: !!s.titleHighlight,
     highlightColor: s.titleHighlightColor || "#fff176",
     highlightThickness: s.titleHighlightThickness ?? 20,
+    stroke: !!s.titleStroke,
+    strokeColor: s.titleStrokeColor || "#000000",
+    strokeWidth: s.titleStrokeWidth ?? 2,
   });
 
-  drawStyledText(ctx, s.subtitle || "Product loop", cx, subtitleY, {
+  drawStyledText(ctx, s.subtitle || "Product loop", posX(s.subtitleAlign || "center"), subtitleY, {
     family: s.subtitleFont,
     size: subtitleSize,
     bold: !!s.subtitleBold,
     italic: !!s.subtitleItalic,
     color: s.subtitleColor || "#5a5a5a",
+    align: s.subtitleAlign || "center",
+    uppercase: !!s.subtitleUppercase,
+    letterSpacing: s.subtitleLetterSpacing ?? 0,
+    lineHeight: s.subtitleLineHeight ?? 1.12,
     shadow: !!s.subtitleShadow,
     shadowColor: s.subtitleShadowColor || "#000000",
     shadowBlur: s.subtitleShadowBlur ?? 6,
     highlight: !!s.subtitleHighlight,
     highlightColor: s.subtitleHighlightColor || "#fff176",
     highlightThickness: s.subtitleHighlightThickness ?? 14,
+    stroke: !!s.subtitleStroke,
+    strokeColor: s.subtitleStrokeColor || "#000000",
+    strokeWidth: s.subtitleStrokeWidth ?? 1,
   });
 
   ctx.restore();
@@ -955,6 +1070,19 @@ function FontStyleEditor({ title, textValue, onText, prefix, s, up }) {
           </select>
         </label>
 
+        <label className="grid gap-2 text-sm font-medium text-neutral-800">
+          Alignement
+          <select
+            value={s[`${prefix}Align`] || "center"}
+            onChange={(e) => up(`${prefix}Align`, e.target.value)}
+            className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
+          >
+            <option value="left">Gauche</option>
+            <option value="center">Centre</option>
+            <option value="right">Droite</option>
+          </select>
+        </label>
+
         <div className="grid grid-cols-2 gap-3">
           <Range
             label="Taille"
@@ -977,12 +1105,34 @@ function FontStyleEditor({ title, textValue, onText, prefix, s, up }) {
           </label>
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <Range
+            label="Interlettrage"
+            value={s[`${prefix}LetterSpacing`] ?? 0}
+            min="-2"
+            max="20"
+            step="0.5"
+            suffix="px"
+            set={(v) => up(`${prefix}LetterSpacing`, v)}
+          />
+          <Range
+            label="Interlignage"
+            value={s[`${prefix}LineHeight`] ?? 1.12}
+            min="0.8"
+            max="2"
+            step="0.05"
+            set={(v) => up(`${prefix}LineHeight`, v)}
+          />
+        </div>
+
         <div className="grid grid-cols-2 gap-2 text-sm">
           {[
             [`${prefix}Bold`, "Gras"],
             [`${prefix}Italic`, "Italique"],
+            [`${prefix}Uppercase`, "Capitales automatiques"],
             [`${prefix}Shadow`, "Ombre portée"],
             [`${prefix}Highlight`, "Surligné"],
+            [`${prefix}Stroke`, "Contour du texte"],
           ].map(([k, l]) => (
             <label key={k} className="flex items-center gap-2 rounded-xl bg-neutral-50 p-3 ring-1 ring-neutral-200">
               <input
@@ -1038,6 +1188,29 @@ function FontStyleEditor({ title, textValue, onText, prefix, s, up }) {
               step="1"
               suffix="px"
               set={(v) => up(`${prefix}HighlightThickness`, v)}
+            />
+          </div>
+        )}
+
+        {!!s[`${prefix}Stroke`] && (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-2 text-sm font-medium text-neutral-800">
+              Couleur du contour
+              <input
+                type="color"
+                value={s[`${prefix}StrokeColor`] || "#000000"}
+                onChange={(e) => up(`${prefix}StrokeColor`, e.target.value)}
+                className="h-11 rounded-xl border border-neutral-200 p-1"
+              />
+            </label>
+            <Range
+              label="Épaisseur du contour"
+              value={s[`${prefix}StrokeWidth`] ?? (prefix === "title" ? 2 : 1)}
+              min="0.5"
+              max="12"
+              step="0.5"
+              suffix="px"
+              set={(v) => up(`${prefix}StrokeWidth`, v)}
             />
           </div>
         )}
