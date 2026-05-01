@@ -496,11 +496,13 @@ function disc(ctx, img, lab, x, y, r, a = 0, shadow = true, labelScale = 1.2) {
     }
   }
 
-  ctx.strokeStyle = "rgba(255,255,255,.15)";
-  ctx.lineWidth = r * 0.018;
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 0.78, -0.9, -0.2);
-  ctx.stroke();
+  if (img) {
+    ctx.strokeStyle = "rgba(255,255,255,.15)";
+    ctx.lineWidth = r * 0.018;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.78, -0.9, -0.2);
+    ctx.stroke();
+  }
   ctx.restore();
 
   const labelR = r * 0.255 * Math.max(0.2, labelScale);
