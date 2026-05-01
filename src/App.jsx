@@ -21,6 +21,9 @@ const BASE = {
   subtitle: "Product loop",
   blockRot: 0,
   shadowA: 0.28,
+  sleeveDepth: 18,
+  sleeveTexture: 0.08,
+  sleeveVignette: 0.18,
   phaseScales: [1, 1, 1, 1, 1, 1],
   phasePos: [
     [0, 0],
@@ -322,35 +325,146 @@ function sweep(ctx, x, y, n, s, p) {
   ctx.restore();
 }
 
-function spine(ctx, img, x, y, n, side = 1, a = 0.5, hue = 215) {
+function spine(
+  ctx,
+  img,
+  x,
+  y,
+  n,
+  side = 1,
+  a = 0.5,
+  hue = 215,
+  depth = 18,
+  compensate = false
+) {
   if (a <= 0.05) return;
 
-  const d = 5;
+  // Compensation: in Album 360°, the whole pack is horizontally compressed
+  // by ctx.transform(c, ...). Without this, the spine becomes paper-thin.
+  const squash = compensate ? Math.max(0.055, (1 - a) / 1.55) : 1;
+  const d = Math.max(3, depth / squash);
+
   const sx = side > 0 ? x + n : x - d;
+  const ex = sx + d;
   const col = domCol(img, hue);
-  const g = ctx.createLinearGradient(sx, 0, sx + d * side, 0);
 
   ctx.save();
   ctx.globalAlpha = a;
 
-  g.addColorStop(0, "#111");
+  // Main spine surface
+  const g = ctx.createLinearGradient(sx, 0, ex, 0);
+  g.addColorStop(0, "#060606");
+  g.addColorStop(0.15, "#171717");
   g.addColorStop(0.5, col);
-  g.addColorStop(1, "#111");
-
+  g.addColorStop(0.85, "#232323");
+  g.addColorStop(1, "#050505");
   ctx.fillStyle = g;
   ctx.fillRect(sx, y, d, n);
 
-  ctx.globalAlpha = a * 0.45;
+  // Fine highlight line to make the volume readable
+  ctx.globalAlpha = a * 0.36;
+  ctx.fillStyle = "rgba(255,255,255,.42)";
+  const hiX = side > 0 ? sx + d * 0.2 : sx + d * 0.7;
+  ctx.fillRect(hiX, y, Math.max(1, d * 0.07), n);
+
+  // Suggested micro markings on the spine
+  ctx.globalAlpha = a * 0.3;
   ctx.strokeStyle = col;
-  ctx.lineWidth = 0.7;
+  ctx.lineWidth = Math.max(0.7, d * 0.06);
+  const textX1 = sx + Math.max(1, d * 0.14);
+  const textX2 = ex - Math.max(1, d * 0.14);
 
   for (let i = 18; i < n - 18; i += 22) {
     ctx.beginPath();
-    ctx.moveTo(sx + 1, y + i);
-    ctx.lineTo(sx + d - 1, y + i);
+    ctx.moveTo(textX1, y + i);
+    ctx.lineTo(textX2, y + i);
     ctx.stroke();
   }
 
+  ctx.restore();
+}
+
+const SLEEVE_TEX = new Map();
+
+function makeSleeveTexturePattern(amount = 0.08) {
+  const key = amount.toFixed(3);
+  if (SLEEVE_TEX.has(key)) return SLEEVE_TEX.get(key);
+
+  const c = document.createElement("canvas");
+  c.width = c.height = 180;
+  const x = c.getContext("2d");
+
+  let seed = 1337;
+  const rnd = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+
+  x.clearRect(0, 0, c.width, c.height);
+  const passes = 240;
+
+  for (let i = 0; i < passes; i++) {
+    const px = rnd() * c.width;
+    const py = rnd() * c.height;
+    const len = 2 + rnd() * 5;
+    const ang = (rnd() - 0.5) * 1.4;
+    const dx = Math.cos(ang) * len;
+    const dy = Math.sin(ang) * len * 0.35;
+
+    x.lineCap = 'round';
+    x.lineWidth = 0.5 + rnd() * 0.9;
+
+    x.strokeStyle = `rgba(255,255,255,${0.015 + amount * 0.18})`;
+    x.beginPath();
+    x.moveTo(px, py);
+    x.lineTo(px + dx, py + dy);
+    x.stroke();
+
+    x.strokeStyle = `rgba(0,0,0,${0.012 + amount * 0.16})`;
+    x.beginPath();
+    x.moveTo(px + 0.8, py + 0.8);
+    x.lineTo(px + dx + 0.8, py + dy + 0.8);
+    x.stroke();
+  }
+
+  for (let i = 0; i < 180; i++) {
+    const px = rnd() * c.width;
+    const py = rnd() * c.height;
+    const r = 0.3 + rnd() * 0.8;
+    x.fillStyle = `rgba(255,255,255,${0.008 + amount * 0.08})`;
+    x.beginPath();
+    x.arc(px, py, r, 0, Math.PI * 2);
+    x.fill();
+  }
+
+  SLEEVE_TEX.set(key, c);
+  return c;
+}
+
+function applySleeveTexture(ctx, x, y, n, amount = 0.08) {
+  if (amount <= 0) return;
+  const tex = makeSleeveTexturePattern(amount);
+
+  ctx.save();
+  ctx.globalAlpha = Math.min(0.45, 0.18 + amount * 0.9);
+  ctx.fillStyle = ctx.createPattern(tex, 'repeat');
+  ctx.fillRect(x, y, n, n);
+  ctx.restore();
+}
+
+function applySleeveVignette(ctx, x, y, n, amount = 0.18) {
+  if (amount <= 0) return;
+
+  const cx = x + n / 2;
+  const cy = y + n / 2;
+  const g = ctx.createRadialGradient(cx, cy, n * 0.12, cx, cy, n * 0.78);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(0.58, 'rgba(0,0,0,0)');
+  g.addColorStop(1, `rgba(0,0,0,${Math.min(0.65, amount)})`);
+
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, n, n);
   ctx.restore();
 }
 
@@ -377,6 +491,8 @@ function sleeve(ctx, img, x, y, n, label, s, p, hue = 215) {
     ctx.fillText(label, x + n / 2, y + n / 2);
   }
 
+  applySleeveTexture(ctx, x, y, n, s.sleeveTexture ?? 0.08);
+  applySleeveVignette(ctx, x, y, n, s.sleeveVignette ?? 0.18);
   sweep(ctx, x, y, n, s, p);
   ctx.restore();
 
@@ -501,7 +617,7 @@ function pack(ctx, a, n, back, out, spin, edge, s, p) {
   }
 
   discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
-  spine(ctx, art, x, y, n, side, edge, hue);
+  spine(ctx, art, x, y, n, side, edge, hue, s.sleeveDepth ?? 18, true);
 
   if (out > 0.01) {
     disc(ctx, a.vinyl, a.label, dx, 0, r, spin, false);
@@ -565,7 +681,7 @@ function reveal(ctx, a, cx, cy, n, p, s) {
 
   discEdge(ctx, dx, 0, r, 0.75);
   disc(ctx, a.vinyl, a.label, dx, 0, r, spin, true);
-  spine(ctx, a.front, sx, sy, n, 1, 0.55, 215);
+  spine(ctx, a.front, sx, sy, n, 1, 0.55, 215, s.sleeveDepth ?? 18, false);
   sleeve(ctx, a.front, sx, sy, n, "FRONT COVER", s, p);
 
   ctx.restore();
@@ -580,7 +696,7 @@ function coverOnly(ctx, a, cx, cy, n, p, s) {
   ctx.save();
   ctx.translate(cx, cy + y);
   ctx.rotate(rot);
-  spine(ctx, a.front, -n / 2, -n / 2, n, 1, 0.5, 215);
+  spine(ctx, a.front, -n / 2, -n / 2, n, 1, 0.5, 215, s.sleeveDepth ?? 18, false);
   sleeve(ctx, a.front, -n / 2, -n / 2, n, "FRONT COVER", s, p);
   ctx.restore();
 }
@@ -1162,6 +1278,24 @@ export default function VinylMockupAnimator() {
                 max="0.6"
                 step="0.02"
                 set={(v) => up("shadowA", v)}
+              />
+
+              <Range
+                label="Texture cartonnée"
+                value={s.sleeveTexture ?? 0.08}
+                min="0"
+                max="0.25"
+                step="0.01"
+                set={(v) => up("sleeveTexture", v)}
+              />
+
+              <Range
+                label="Vignettage pochette"
+                value={s.sleeveVignette ?? 0.18}
+                min="0"
+                max="0.6"
+                step="0.02"
+                set={(v) => up("sleeveVignette", v)}
               />
 
               <div className="rounded-2xl border border-neutral-200 bg-white p-3">
