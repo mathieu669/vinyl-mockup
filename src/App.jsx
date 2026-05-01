@@ -24,6 +24,13 @@ const BASE = {
   bgMode: "gradient",
   bgA: "#ffffff",
   bgB: "#ffffff",
+  bgC: "#ffffff",
+  bgD: "#ffffff",
+  bgE: "#ffffff",
+  bgColorCount: 2,
+  bgGradientReverse: false,
+  bgGradientAngle: 135,
+  bgGradientType: "linear",
   floor: true,
   badge: true,
   safe: false,
@@ -120,6 +127,12 @@ const cleanSettings = (o) => ({
   phaseDiscOut: cleanPhaseArray(o.phaseDiscOut, BASE.phaseDiscOut),
   phasePos: cleanPhasePos(o.phasePos, BASE.phasePos),
 });
+
+const getGradientColors = (s) => {
+  const count = Math.max(2, Math.min(5, Number(s.bgColorCount) || 2));
+  const colors = [s.bgA, s.bgB, s.bgC, s.bgD, s.bgE].slice(0, count);
+  return s.bgGradientReverse ? [...colors].reverse() : colors;
+};
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const map01 = (v, a, b) => (b === a ? 0 : clamp((v - a) / (b - a)));
@@ -272,15 +285,41 @@ function drawBg(ctx, s, img, t) {
     o.addColorStop(1, "rgba(0,0,0,.28)");
     ctx.fillStyle = o;
     ctx.fillRect(0, 0, w, h);
-  } else if (s.bgA === s.bgB) {
-    ctx.fillStyle = s.bgA;
-    ctx.fillRect(0, 0, w, h);
   } else {
-    const g = ctx.createLinearGradient(0, 0, w, h);
-    g.addColorStop(0, s.bgA);
-    g.addColorStop(1, s.bgB);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
+    const colors = getGradientColors(s);
+    const gradientType = s.bgGradientType === "radial" ? "radial" : "linear";
+
+    if (colors.every((c) => c === colors[0])) {
+      ctx.fillStyle = colors[0];
+      ctx.fillRect(0, 0, w, h);
+    } else {
+      let g;
+
+      if (gradientType === "radial") {
+        const cx = w / 2;
+        const cy = h / 2;
+        const r = Math.max(w, h) * 0.75;
+        g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      } else {
+        const angle = (((Number(s.bgGradientAngle) || 0) - 90) * Math.PI) / 180;
+        const cx = w / 2;
+        const cy = h / 2;
+        const len = Math.sqrt(w * w + h * h) / 2;
+        const x1 = cx - Math.cos(angle) * len;
+        const y1 = cy - Math.sin(angle) * len;
+        const x2 = cx + Math.cos(angle) * len;
+        const y2 = cy + Math.sin(angle) * len;
+        g = ctx.createLinearGradient(x1, y1, x2, y2);
+      }
+
+      colors.forEach((color, i) => {
+        const stop = colors.length === 1 ? 0 : i / (colors.length - 1);
+        g.addColorStop(stop, color);
+      });
+
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    }
   }
 
   if (s.floor) {
@@ -1421,26 +1460,78 @@ export default function VinylMockupAnimator() {
                 </select>
               </label>
 
-              <div className="grid grid-cols-2 gap-3">
-                <label className="grid gap-2 text-sm font-medium">
-                  Couleur A
-                  <input
-                    type="color"
-                    value={s.bgA}
-                    onChange={(e) => up("bgA", e.target.value)}
-                    className="h-11 rounded-xl border border-neutral-200 p-1"
-                  />
-                </label>
+              <div className="grid gap-3 rounded-2xl border border-neutral-200 bg-white p-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="grid gap-2 text-sm font-medium">
+                    Type de dégradé
+                    <select
+                      value={s.bgGradientType || "linear"}
+                      onChange={(e) => up("bgGradientType", e.target.value)}
+                      className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
+                    >
+                      <option value="linear">Axial</option>
+                      <option value="radial">Radial</option>
+                    </select>
+                  </label>
 
-                <label className="grid gap-2 text-sm font-medium">
-                  Couleur B
-                  <input
-                    type="color"
-                    value={s.bgB}
-                    onChange={(e) => up("bgB", e.target.value)}
-                    className="h-11 rounded-xl border border-neutral-200 p-1"
-                  />
-                </label>
+                  <label className="grid gap-2 text-sm font-medium">
+                    Nombre de couleurs
+                    <select
+                      value={s.bgColorCount || 2}
+                      onChange={(e) => up("bgColorCount", Number(e.target.value))}
+                      className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
+                    >
+                      <option value="2">2 couleurs</option>
+                      <option value="3">3 couleurs</option>
+                      <option value="4">4 couleurs</option>
+                      <option value="5">5 couleurs</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <label className="flex items-center gap-2 rounded-xl bg-neutral-50 p-3 ring-1 ring-neutral-200">
+                    <input
+                      type="checkbox"
+                      checked={!!s.bgGradientReverse}
+                      onChange={(e) => up("bgGradientReverse", e.target.checked)}
+                      className="accent-neutral-950"
+                    />
+                    Inverser les couleurs
+                  </label>
+                </div>
+
+                <Range
+                  label="Angle du dégradé"
+                  value={s.bgGradientAngle ?? 135}
+                  min="0"
+                  max="360"
+                  step="1"
+                  suffix="°"
+                  set={(v) => up("bgGradientAngle", v)}
+                />
+
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    ["bgA", "Couleur A"],
+                    ["bgB", "Couleur B"],
+                    ["bgC", "Couleur C"],
+                    ["bgD", "Couleur D"],
+                    ["bgE", "Couleur E"],
+                  ]
+                    .slice(0, Math.max(2, Math.min(5, Number(s.bgColorCount) || 2)))
+                    .map(([key, label]) => (
+                      <label key={key} className="grid gap-2 text-sm font-medium">
+                        {label}
+                        <input
+                          type="color"
+                          value={s[key]}
+                          onChange={(e) => up(key, e.target.value)}
+                          className="h-11 rounded-xl border border-neutral-200 p-1"
+                        />
+                      </label>
+                    ))}
+                </div>
               </div>
 
               <Text label="Titre" value={s.title} set={(v) => up("title", v)} />
