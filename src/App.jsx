@@ -544,13 +544,6 @@ function disc(ctx, img, lab, x, y, r, a = 0, shadow = true, labelScale = 1.2) {
     }
   }
 
-  if (img) {
-    ctx.strokeStyle = "rgba(255,255,255,.15)";
-    ctx.lineWidth = r * 0.018;
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 0.78, -0.9, -0.2);
-    ctx.stroke();
-  }
   ctx.restore();
 
   const labelR = r * 0.255 * Math.max(0.2, labelScale);
@@ -1098,7 +1091,7 @@ export default function VinylMockupAnimator() {
                   key={p.id}
                   type="button"
                   onClick={() => {
-                    setS({ ...p.settings });
+                    setS((o) => ({ ...o, mode: p.settings.mode }));
                     clearExport();
                   }}
                   className={`rounded-2xl border p-3 text-left ${
