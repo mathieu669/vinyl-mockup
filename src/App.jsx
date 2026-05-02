@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 /* -----------------------------
    RENDER ENGINE
------------------------------ */
+----------------------------- */ 
 const FPS = 30;
 const FORMATS = {
   "9:16": { w: 1080, h: 1920 },
@@ -347,13 +347,14 @@ function objShadow(ctx, x, y, rx, ry, a) {
   ctx.restore();
 }
 
-function sweep(ctx, x, y, n, s, p) {
+function sweep(ctx, x, y, n, s, absT = 0) {
   if (!s.sweep) return;
 
   const w = n * s.sweepW;
   const a = (s.sweepA * Math.PI) / 180;
-  const travel = n * 2.8;
-  const cx = -travel / 2 + travel * (((p * s.sweepS) % 1 + 1) % 1);
+  const progress = ((((absT / Math.max(0.001, s.duration)) * s.sweepS) % 1) + 1) % 1;
+  const travel = n * 3.4;
+  const cx = -travel / 2 + travel * progress;
 
   ctx.save();
 
@@ -372,7 +373,7 @@ function sweep(ctx, x, y, n, s, p) {
   g.addColorStop(1, "rgba(255,255,255,0)");
 
   ctx.fillStyle = g;
-  ctx.fillRect(-n * 1.6, -n * 1.6, n * 3.2, n * 3.2);
+  ctx.fillRect(-n * 2.2, -n * 2.2, n * 4.4, n * 4.4);
   ctx.restore();
 }
 function spine(
@@ -450,7 +451,7 @@ function applySleeveVignette(ctx, x, y, n, amount = 0.18) {
   ctx.restore();
 }
 
-function sleeve(ctx, img, x, y, n, label, s, p, hue = 215) {
+function sleeve(ctx, img, x, y, n, label, s, absT, hue = 215) {
   ctx.save();
   ctx.fillStyle = "#111";
   ctx.fillRect(x, y, n, n);
@@ -474,7 +475,7 @@ function sleeve(ctx, img, x, y, n, label, s, p, hue = 215) {
   }
 
   applySleeveVignette(ctx, x, y, n, s.sleeveVignette ?? 0.18);
-  sweep(ctx, x, y, n, s, p);
+  sweep(ctx, x, y, n, s, absT);
   ctx.restore();
 
   ctx.strokeStyle = "rgba(255,255,255,.14)";
@@ -574,7 +575,7 @@ function disc(ctx, img, lab, x, y, r, a = 0, shadow = true, labelScale = 1.2) {
   ctx.fill();
 }
 
-function pack(ctx, a, n, back, out, spin, edge, s, p) {
+function pack(ctx, a, n, back, out, spin, edge, s, absT) {
   const x = -n / 2;
   const y = -n / 2;
   const side = back ? -1 : 1;
@@ -602,10 +603,10 @@ function pack(ctx, a, n, back, out, spin, edge, s, p) {
     disc(ctx, a.vinyl, a.label, dx, 0, r, spin, false, s.labelScale ?? 1.2);
   }
 
-  sleeve(ctx, art, x, y, n, back ? "BACK COVER" : "FRONT COVER", s, p, hue);
+  sleeve(ctx, art, x, y, n, back ? "BACK COVER" : "FRONT COVER", s, absT, hue);
 }
 
-function album360(ctx, a, cx, cy, n, p, s) {
+function album360(ctx, a, cx, cy, n, p, s, absT = 0) {
   const q = seq(p, s);
   const c = Math.max(0.055, Math.abs(Math.cos(q.ang)));
   const back = Math.cos(q.ang) < 0;
@@ -628,15 +629,16 @@ function album360(ctx, a, cx, cy, n, p, s) {
   ctx.rotate(rot);
   ctx.scale(q.z, q.z);
   ctx.transform(c, 0, shear, 1, 0, 0);
-  pack(ctx, a, n, back, q.out, q.spin, edge, s, p);
+  const spin = (absT / Math.max(0.001, s.duration)) * Math.PI * 2 * 3.2 * s.discSpin;
+  pack(ctx, a, n, back, q.out, spin, edge, s, absT);
   ctx.restore();
 }
 
-function reveal(ctx, a, cx, cy, n, p, s) {
+function reveal(ctx, a, cx, cy, n, p, s, absT = 0) {
   const r = n * 0.49;
   const w = n * 1.67;
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
-  const spin = p * Math.PI * 2 * s.discSpin;
+  const spin = (absT / Math.max(0.001, s.duration)) * Math.PI * 2 * s.discSpin;
   const y = Math.sin(p * Math.PI * 2) * 14;
 
   objShadow(ctx, cx, cy + n * 0.38 + y * 0.15 + (s.shadowY ?? 0), n * 0.78, n * 0.18, s.shadowA);
@@ -663,12 +665,12 @@ function reveal(ctx, a, cx, cy, n, p, s) {
     disc(ctx, a.vinyl, a.label, dx, 0, r, spin, true, s.labelScale ?? 1.2);
   }
   // Tranche masquée lorsque la pochette est de face.
-  sleeve(ctx, a.front, sx, sy, n, "FRONT COVER", s, p);
+  sleeve(ctx, a.front, sx, sy, n, "FRONT COVER", s, absT);
 
   ctx.restore();
 }
 
-function coverOnly(ctx, a, cx, cy, n, p, s) {
+function coverOnly(ctx, a, cx, cy, n, p, s, absT = 0) {
   const y = Math.sin(p * Math.PI * 2) * 12;
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
 
@@ -678,7 +680,7 @@ function coverOnly(ctx, a, cx, cy, n, p, s) {
   ctx.translate(cx, cy + y);
   ctx.rotate(rot);
   // Tranche masquée lorsque la pochette est de face.
-  sleeve(ctx, a.front, -n / 2, -n / 2, n, "FRONT COVER", s, p);
+  sleeve(ctx, a.front, -n / 2, -n / 2, n, "FRONT COVER", s, absT);
   ctx.restore();
 }
 
@@ -708,7 +710,7 @@ function badge(ctx, s) {
   ctx.restore();
 }
 
-function scene(ctx, a, s, t) {
+function scene(ctx, a, s, t, absT = t) {
   const p = (t / s.duration) % 1;
   const n = s.scale * 560;
   const { w, h } = getOut(s.format);
@@ -716,11 +718,11 @@ function scene(ctx, a, s, t) {
   drawBg(ctx, s, a.bg, t);
 
   if (s.mode === "album360") {
-    album360(ctx, a, w / 2, h * 0.47, n, p, s);
+    album360(ctx, a, w / 2, h * 0.47, n, p, s, absT);
   } else if (s.mode === "reveal") {
-    reveal(ctx, a, w / 2, h * 0.47, n, p, s);
+    reveal(ctx, a, w / 2, h * 0.47, n, p, s, absT);
   } else {
-    coverOnly(ctx, a, w / 2, h * 0.47, n, p, s);
+    coverOnly(ctx, a, w / 2, h * 0.47, n, p, s, absT);
   }
 
   badge(ctx, s);
@@ -892,6 +894,7 @@ export default function VinylMockupAnimator() {
   const [progress, setProgress] = useState(0);
   const [exportFormat, setExportFormat] = useState("mp4");
   const [previewPhase, setPreviewPhase] = useState(null);
+  const [replayKey, setReplayKey] = useState(0);
 
   const canRec = useMemo(() => typeof MediaRecorder !== "undefined", []);
 
@@ -958,6 +961,12 @@ export default function VinylMockupAnimator() {
     return marks[idx] * s.duration;
   };
 
+  const restartAnimation = () => {
+    setPreviewPhase(null);
+    setReplayKey((k) => k + 1);
+    clearExport();
+  };
+
   useEffect(() => {
     let off = false;
 
@@ -982,7 +991,8 @@ export default function VinylMockupAnimator() {
     c.height = out.h;
 
     if (previewPhase !== null) {
-      scene(ctx, imgs, s, getPreviewTimeForPhase(previewPhase));
+      const frozenT = getPreviewTimeForPhase(previewPhase);
+      scene(ctx, imgs, s, frozenT, frozenT);
       return;
     }
 
@@ -995,7 +1005,7 @@ export default function VinylMockupAnimator() {
         ? Math.min(elapsed, s.duration)
         : elapsed % s.duration;
 
-      scene(ctx, imgs, s, t);
+      scene(ctx, imgs, s, t, elapsed);
 
       if (s.playbackMode === "single" && elapsed >= s.duration) return;
       f = requestAnimationFrame(loop);
@@ -1003,7 +1013,7 @@ export default function VinylMockupAnimator() {
 
     f = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(f);
-  }, [imgs, s, previewPhase]);
+  }, [imgs, s, previewPhase, replayKey]);
 
   useEffect(() => {
     return () => {
@@ -1435,6 +1445,14 @@ export default function VinylMockupAnimator() {
                     />
                   ))}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={restartAnimation}
+                  className="mt-4 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-medium hover:bg-neutral-100"
+                >
+                  Relancer l’animation
+                </button>
               </div>
 
               <div className="rounded-2xl border border-neutral-200 bg-white p-3">
@@ -1483,6 +1501,14 @@ export default function VinylMockupAnimator() {
                     </div>
                   ))}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={restartAnimation}
+                  className="mt-4 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-medium hover:bg-neutral-100"
+                >
+                  Relancer l’animation
+                </button>
               </div>
             </div>
           </Sec>
