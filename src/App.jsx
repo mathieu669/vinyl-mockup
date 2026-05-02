@@ -37,10 +37,10 @@ const BASE = {
   title: "NUMBERED VINYL",
   subtitle: "Product loop",
   blockRot: 0,
-  shadowEnabled: true,
   shadowA: 0.28,
   shadowX: 0,
   shadowY: 0,
+  shadowW: 1,
   sleeveDepth: 18,
   sleeveVignette: 0.18,
   labelScale: 1.2,
@@ -608,16 +608,14 @@ function album360(ctx, a, cx, cy, n, p, s, absT = 0) {
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
   const sn = n * q.z;
 
-  if (s.shadowEnabled !== false) {
-    objShadow(
-      ctx,
-      cx + q.x + (s.shadowX ?? 0),
-      cy + q.py + sn * 0.7 + q.y * 0.18 + (s.shadowY ?? 0),
-      sn * (0.58 + q.out * 0.32),
-      sn * 0.19,
-      s.shadowA
-    );
-  }
+  objShadow(
+    ctx,
+    cx + q.x + (s.shadowX ?? 0),
+    cy + q.py + sn * 0.7 + q.y * 0.18 + (s.shadowY ?? 0),
+    sn * (0.58 + q.out * 0.32) * (s.shadowW ?? 1),
+    sn * 0.19,
+    s.shadowA
+  );
 
   ctx.save();
   ctx.translate(cx + q.x, cy + q.py + q.y);
@@ -636,16 +634,14 @@ function reveal(ctx, a, cx, cy, n, p, s, absT = 0) {
   const spin = (absT / Math.max(0.001, s.duration)) * Math.PI * 2 * s.discSpin;
   const y = Math.sin(p * Math.PI * 2) * 14;
 
-  if (s.shadowEnabled !== false) {
-    objShadow(
-      ctx,
-      cx + (s.shadowX ?? 0),
-      cy + n * 0.38 + y * 0.15 + (s.shadowY ?? 0),
-      n * 0.78,
-      n * 0.18,
-      s.shadowA
-    );
-  }
+  objShadow(
+    ctx,
+    cx + (s.shadowX ?? 0),
+    cy + n * 0.38 + y * 0.15 + (s.shadowY ?? 0),
+    n * 0.78 * (s.shadowW ?? 1),
+    n * 0.18,
+    s.shadowA
+  );
 
   ctx.save();
   ctx.translate(cx, cy + y);
@@ -669,16 +665,14 @@ function coverOnly(ctx, a, cx, cy, n, p, s, absT = 0) {
   const y = Math.sin(p * Math.PI * 2) * 12;
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
 
-  if (s.shadowEnabled !== false) {
-    objShadow(
-      ctx,
-      cx + (s.shadowX ?? 0),
-      cy + n * 0.38 + y * 0.15 + (s.shadowY ?? 0),
-      n * 0.62,
-      n * 0.17,
-      s.shadowA
-    );
-  }
+  objShadow(
+    ctx,
+    cx + (s.shadowX ?? 0),
+    cy + n * 0.38 + y * 0.15 + (s.shadowY ?? 0),
+    n * 0.62 * (s.shadowW ?? 1),
+    n * 0.17,
+    s.shadowA
+  );
 
   ctx.save();
   ctx.translate(cx, cy + y);
@@ -1373,18 +1367,8 @@ export default function VinylMockupAnimator() {
                 set={(v) => up("blockRot", v)}
               />
 
-              <label className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium">
-                <input
-                  type="checkbox"
-                  checked={s.shadowEnabled !== false}
-                  onChange={(e) => up("shadowEnabled", e.target.checked)}
-                  className="accent-neutral-950"
-                />
-                Ombre portée
-              </label>
-
               <Range
-                label="Opacité ombre album"
+                label="Opacité ombre"
                 value={s.shadowA}
                 min="0"
                 max="0.6"
@@ -1393,7 +1377,7 @@ export default function VinylMockupAnimator() {
               />
 
               <Range
-                label="Position horizontale ombre album"
+                label="Position horizontale ombre"
                 value={s.shadowX ?? 0}
                 min="-200"
                 max="200"
@@ -1402,12 +1386,22 @@ export default function VinylMockupAnimator() {
               />
 
               <Range
-                label="Position verticale ombre album"
+                label="Position verticale ombre"
                 value={s.shadowY ?? 0}
                 min="-200"
                 max="200"
                 step="1"
                 set={(v) => up("shadowY", v)}
+              />
+
+              <Range
+                label="Largeur ombre"
+                value={s.shadowW ?? 1}
+                min="0.2"
+                max="2.5"
+                step="0.01"
+                suffix="×"
+                set={(v) => up("shadowW", v)}
               />
 
               <Range
