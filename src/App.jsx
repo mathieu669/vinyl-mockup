@@ -589,7 +589,7 @@ function pack(ctx, a, n, back, out, spin, edge, s, p) {
   const art = back ? a.back : a.front;
   const hue = back ? 345 : 215;
 
-  if (out > 0.01) {
+  if (a.vinyl && out > 0.01) {
     ctx.save();
     ctx.globalAlpha = 0.28;
     ctx.filter = "blur(10px)";
@@ -598,12 +598,13 @@ function pack(ctx, a, n, back, out, spin, edge, s, p) {
     ctx.ellipse(dx * 0.92, 0, r * 0.88, r * 0.88, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+
+    discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
   }
 
-  discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
   spine(ctx, art, x, y, n, side, edge, hue, s.sleeveDepth ?? 18, true);
 
-  if (out > 0.01) {
+  if (a.vinyl && out > 0.01) {
     disc(ctx, a.vinyl, a.label, dx, 0, r, spin, false, s.labelScale ?? 1.2);
   }
 
@@ -654,17 +655,19 @@ function reveal(ctx, a, cx, cy, n, p, s) {
   const sy = -n / 2;
   const dx = sx + n / 2 + n * 0.67;
 
-  ctx.save();
-  ctx.globalAlpha = 0.28;
-  ctx.filter = "blur(10px)";
-  ctx.fillStyle = "rgba(0,0,0,.55)";
-  ctx.beginPath();
-  ctx.ellipse(dx * 0.92, 0, r * 0.88, r * 0.88, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  if (a.vinyl) {
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.filter = "blur(10px)";
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.beginPath();
+    ctx.ellipse(dx * 0.92, 0, r * 0.88, r * 0.88, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 
-  discEdge(ctx, dx, 0, r, 0.75);
-  disc(ctx, a.vinyl, a.label, dx, 0, r, spin, true, s.labelScale ?? 1.2);
+    discEdge(ctx, dx, 0, r, 0.75);
+    disc(ctx, a.vinyl, a.label, dx, 0, r, spin, true, s.labelScale ?? 1.2);
+  }
   // Tranche masquée lorsque la pochette est de face.
   sleeve(ctx, a.front, sx, sy, n, "FRONT COVER", s, p);
 
