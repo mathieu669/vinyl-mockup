@@ -38,6 +38,7 @@ const BASE = {
   subtitle: "Product loop",
   blockRot: 0,
   shadowA: 0.28,
+  shadowY: 0,
   sleeveDepth: 18,
   sleeveVignette: 0.18,
   labelScale: 1.2,
@@ -616,7 +617,7 @@ function album360(ctx, a, cx, cy, n, p, s) {
   objShadow(
     ctx,
     cx + q.x,
-    cy + q.py + sn * 0.7 + q.y * 0.18,
+    cy + q.py + sn * 0.7 + q.y * 0.18 + (s.shadowY ?? 0),
     sn * (0.58 + q.out * 0.32),
     sn * 0.19,
     s.shadowA
@@ -638,7 +639,7 @@ function reveal(ctx, a, cx, cy, n, p, s) {
   const spin = p * Math.PI * 2 * s.discSpin;
   const y = Math.sin(p * Math.PI * 2) * 14;
 
-  objShadow(ctx, cx, cy + n * 0.38 + y * 0.15, n * 0.78, n * 0.18, s.shadowA);
+  objShadow(ctx, cx, cy + n * 0.38 + y * 0.15 + (s.shadowY ?? 0), n * 0.78, n * 0.18, s.shadowA);
 
   ctx.save();
   ctx.translate(cx, cy + y);
@@ -671,7 +672,7 @@ function coverOnly(ctx, a, cx, cy, n, p, s) {
   const y = Math.sin(p * Math.PI * 2) * 12;
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
 
-  objShadow(ctx, cx, cy + n * 0.38 + y * 0.15, n * 0.62, n * 0.17, s.shadowA);
+  objShadow(ctx, cx, cy + n * 0.38 + y * 0.15 + (s.shadowY ?? 0), n * 0.62, n * 0.17, s.shadowA);
 
   ctx.save();
   ctx.translate(cx, cy + y);
@@ -890,6 +891,7 @@ export default function VinylMockupAnimator() {
   const [rec, setRec] = useState(false);
   const [progress, setProgress] = useState(0);
   const [exportFormat, setExportFormat] = useState("mp4");
+  const [previewPhase, setPreviewPhase] = useState(null);
 
   const canRec = useMemo(() => typeof MediaRecorder !== "undefined", []);
 
@@ -898,7 +900,12 @@ export default function VinylMockupAnimator() {
   const webmTypes = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
   const pickMime = (types) => types.find((t) => MediaRecorder.isTypeSupported(t)) || "";
 
-  const up = (k, v) => setS((o) => ({ ...o, [k]: v }));
+  const up = (k, v) => {
+    if (!["phaseScales", "phaseDiscOut", "phasePos"].includes(k)) {
+      setPreviewPhase(null);
+    }
+    setS((o) => ({ ...o, [k]: v }));
+  };
   const upSrc = (k, v) => setSrc((o) => ({ ...o, [k]: v }));
 
   const storeProfiles = (next) => {
@@ -925,12 +932,30 @@ export default function VinylMockupAnimator() {
   };
 
   const loadProfile = (p) => {
+    setPreviewPhase(null);
     setS({ ...BASE, ...cleanSettings(p.settings) });
     clearExport();
   };
 
   const deleteProfile = (name) => {
     storeProfiles(profiles.filter((p) => p.name !== name));
+  };
+
+  const getPreviewTimeForPhase = (index) => {
+    const p1 = 0.24;
+    const p2 = 0.44;
+    const half = 0.2 / Math.max(0.7, s.revSpeed);
+    const p3 = Math.max(0.58, Math.min(0.72, p2 + half));
+    const p4 = Math.max(0.76, Math.min(0.9, p3 + 0.16));
+    const marks = [
+      0,
+      p1 * 0.5,
+      (p1 + p2) * 0.5,
+      (p2 + p3) * 0.5,
+      (p3 + p4) * 0.5,
+    ];
+    const idx = Math.max(0, Math.min(4, index ?? 0));
+    return marks[idx] * s.duration;
   };
 
   useEffect(() => {
@@ -956,6 +981,11 @@ export default function VinylMockupAnimator() {
     c.width = out.w;
     c.height = out.h;
 
+    if (previewPhase !== null) {
+      scene(ctx, imgs, s, getPreviewTimeForPhase(previewPhase));
+      return;
+    }
+
     let f;
     const start = performance.now();
 
@@ -973,7 +1003,7 @@ export default function VinylMockupAnimator() {
 
     f = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(f);
-  }, [imgs, s]);
+  }, [imgs, s, previewPhase]);
 
   useEffect(() => {
     return () => {
@@ -1091,6 +1121,7 @@ export default function VinylMockupAnimator() {
                   key={p.id}
                   type="button"
                   onClick={() => {
+                    setPreviewPhase(null);
                     setS((o) => ({ ...o, mode: p.settings.mode }));
                     clearExport();
                   }}
@@ -1148,6 +1179,7 @@ export default function VinylMockupAnimator() {
                       <button
                         type="button"
                         onClick={() => {
+                          setPreviewPhase(null);
                           setS({ ...BASE, ...cleanSettings(p.settings) });
                           setProfileName(p.name);
                         }}
@@ -1337,6 +1369,15 @@ export default function VinylMockupAnimator() {
               />
 
               <Range
+                label="Hauteur ombre album"
+                value={s.shadowY ?? 0}
+                min="-200"
+                max="200"
+                step="1"
+                set={(v) => up("shadowY", v)}
+              />
+
+              <Range
                 label="Vignettage pochette"
                 value={s.sleeveVignette ?? 0.18}
                 min="0"
@@ -1355,14 +1396,15 @@ export default function VinylMockupAnimator() {
                       label={PHASE_LABELS[i]}
                       value={v}
                       step={0.5}
-                      set={(val) =>
+                      set={(val) => {
+                        setPreviewPhase(i);
                         up(
                           "phaseScales",
                           cleanPhaseArray(s.phaseScales, BASE.phaseScales).map((x, j) =>
                             j === i ? val : x
                           )
-                        )
-                      }
+                        );
+                      }}
                     />
                   ))}
                 </div>
@@ -1381,21 +1423,22 @@ export default function VinylMockupAnimator() {
                       max="100"
                       step="1"
                       suffix="%"
-                      set={(val) =>
+                      set={(val) => {
+                        setPreviewPhase(i);
                         up(
                           "phaseDiscOut",
                           cleanPhaseArray(s.phaseDiscOut, BASE.phaseDiscOut).map((x, j) =>
                             j === i ? val : x
                           )
-                        )
-                      }
+                        );
+                      }}
                     />
                   ))}
                 </div>
               </div>
 
               <div className="rounded-2xl border border-neutral-200 bg-white p-3">
-                <div className="mb-3 text-sm font-semibold">Position par phase — X / Y</div>
+                <div className="mb-3 text-sm font-semibold">Position par phase — horizontal / vertical</div>
 
                 <div className="grid gap-4">
                   {cleanPhasePos(s.phasePos, BASE.phasePos).map((v, i) => (
@@ -1405,35 +1448,37 @@ export default function VinylMockupAnimator() {
                       </div>
 
                       <Range
-                        label="X"
+                        label="Horizontal"
                         value={v[0]}
                         min="-300"
                         max="300"
                         step="10"
-                        set={(val) =>
+                        set={(val) => {
+                          setPreviewPhase(i);
                           up(
                             "phasePos",
                             cleanPhasePos(s.phasePos, BASE.phasePos).map((p, j) =>
                               j === i ? [val, p[1]] : p
                             )
-                          )
-                        }
+                          );
+                        }}
                       />
 
                       <Range
-                        label="Y"
+                        label="Vertical"
                         value={v[1]}
                         min="-300"
                         max="300"
                         step="10"
-                        set={(val) =>
+                        set={(val) => {
+                          setPreviewPhase(i);
                           up(
                             "phasePos",
                             cleanPhasePos(s.phasePos, BASE.phasePos).map((p, j) =>
                               j === i ? [p[0], val] : p
                             )
-                          )
-                        }
+                          );
+                        }}
                       />
                     </div>
                   ))}
