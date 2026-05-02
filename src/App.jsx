@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 /* -----------------------------
    RENDER ENGINE
------------------------------ */ 
+----------------------------- */
 const FPS = 30;
 const FORMATS = {
   "9:16": { w: 1080, h: 1920 },
@@ -585,15 +585,6 @@ function pack(ctx, a, n, back, out, spin, edge, s, absT) {
   const hue = back ? 345 : 215;
 
   if (a.vinyl && out > 0.01) {
-    ctx.save();
-    ctx.globalAlpha = 0.28;
-    ctx.filter = "blur(10px)";
-    ctx.fillStyle = "rgba(0,0,0,.55)";
-    ctx.beginPath();
-    ctx.ellipse(dx * 0.92, 0, r * 0.88, r * 0.88, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
     discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
   }
 
@@ -652,15 +643,6 @@ function reveal(ctx, a, cx, cy, n, p, s, absT = 0) {
   const dx = sx + n / 2 + n * 0.67;
 
   if (a.vinyl) {
-    ctx.save();
-    ctx.globalAlpha = 0.28;
-    ctx.filter = "blur(10px)";
-    ctx.fillStyle = "rgba(0,0,0,.55)";
-    ctx.beginPath();
-    ctx.ellipse(dx * 0.92, 0, r * 0.88, r * 0.88, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
     discEdge(ctx, dx, 0, r, 0.75);
     disc(ctx, a.vinyl, a.label, dx, 0, r, spin, true, s.labelScale ?? 1.2);
   }
