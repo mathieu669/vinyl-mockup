@@ -20,6 +20,7 @@ const BASE = {
   loopRepeats: 1,
   scale: 1,
   discSpin: 1.4,
+  vinylCount: 1,
   revSpeed: 1,
   bgMode: "gradient",
   bgA: "#ffffff",
@@ -66,6 +67,19 @@ const PRESETS = [
     label: "Disque visible",
     desc: "Disque sorti aux deux tiers",
     settings: { ...BASE },
+  },
+  {
+    id: "doubleReveal",
+    label: "Double vinyle",
+    desc: "Deux disques sortis en éventail",
+    settings: {
+      ...BASE,
+      mode: "reveal",
+      vinylCount: 2,
+      scale: 0.92,
+      title: "DOUBLE VINYL",
+      subtitle: "2LP product loop",
+    },
   },
   {
     id: "album360",
@@ -585,15 +599,30 @@ function pack(ctx, a, n, back, out, spin, edge, s, absT) {
   const r = n * 0.49;
   const art = back ? a.back : a.front;
   const hue = back ? 345 : 215;
+  const isDouble = Number(s.vinylCount ?? 1) >= 2;
+  const vinylA = a.vinyl || a.vinyl2;
+  const vinylB = a.vinyl2 || a.vinyl;
+  const labelA = a.label || a.label2;
+  const labelB = a.label2 || a.label;
 
-  if (a.vinyl && out > 0.01) {
-    discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
+  if (vinylA && out > 0.01) {
+    if (isDouble && vinylB) {
+      discEdge(ctx, dx + side * n * 0.08, -n * 0.13, r * 0.98, edge * clamp(out * 2.2) * 0.8);
+      discEdge(ctx, dx, n * 0.13, r, edge * clamp(out * 2.2));
+    } else {
+      discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
+    }
   }
 
   spine(ctx, art, x, y, n, side, edge, hue, s.sleeveDepth ?? 18, true);
 
-  if (a.vinyl && out > 0.01) {
-    disc(ctx, a.vinyl, a.label, dx, 0, r, spin, false, s.labelScale ?? 1.2);
+  if (vinylA && out > 0.01) {
+    if (isDouble && vinylB) {
+      disc(ctx, vinylB, labelB, dx + side * n * 0.08, -n * 0.13, r * 0.98, spin * 0.86 + Math.PI * 0.14, false, s.labelScale ?? 1.2);
+      disc(ctx, vinylA, labelA, dx, n * 0.13, r, spin, false, s.labelScale ?? 1.2);
+    } else {
+      disc(ctx, vinylA, labelA, dx, 0, r, spin, false, s.labelScale ?? 1.2);
+    }
   }
 
   sleeve(ctx, art, x, y, n, back ? "BACK COVER" : "FRONT COVER", s, absT, hue);
@@ -633,12 +662,17 @@ function reveal(ctx, a, cx, cy, n, p, s, absT = 0) {
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
   const spin = (absT / Math.max(0.001, s.duration)) * Math.PI * 2 * s.discSpin;
   const y = Math.sin(p * Math.PI * 2) * 14;
+  const isDouble = Number(s.vinylCount ?? 1) >= 2;
+  const vinylA = a.vinyl || a.vinyl2;
+  const vinylB = a.vinyl2 || a.vinyl;
+  const labelA = a.label || a.label2;
+  const labelB = a.label2 || a.label;
 
   objShadow(
     ctx,
     cx + (s.shadowX ?? 0),
     cy + n * 0.38 + y * 0.15 + (s.shadowY ?? 0),
-    n * 0.78 * (s.shadowW ?? 1),
+    n * (isDouble ? 0.9 : 0.78) * (s.shadowW ?? 1),
     n * 0.18,
     s.shadowA
   );
@@ -651,9 +685,16 @@ function reveal(ctx, a, cx, cy, n, p, s, absT = 0) {
   const sy = -n / 2;
   const dx = sx + n / 2 + n * 0.67;
 
-  if (a.vinyl) {
-    discEdge(ctx, dx, 0, r, 0.75);
-    disc(ctx, a.vinyl, a.label, dx, 0, r, spin, true, s.labelScale ?? 1.2);
+  if (vinylA) {
+    if (isDouble && vinylB) {
+      discEdge(ctx, dx + n * 0.14, -n * 0.16, r * 0.98, 0.48);
+      disc(ctx, vinylB, labelB, dx + n * 0.14, -n * 0.16, r * 0.98, spin * 0.88 + Math.PI * 0.16, true, s.labelScale ?? 1.2);
+      discEdge(ctx, dx, n * 0.14, r, 0.75);
+      disc(ctx, vinylA, labelA, dx, n * 0.14, r, spin, true, s.labelScale ?? 1.2);
+    } else {
+      discEdge(ctx, dx, 0, r, 0.75);
+      disc(ctx, vinylA, labelA, dx, 0, r, spin, true, s.labelScale ?? 1.2);
+    }
   }
   // Tranche masquée lorsque la pochette est de face.
   sleeve(ctx, a.front, sx, sy, n, "FRONT COVER", s, absT);
@@ -871,7 +912,9 @@ export default function VinylMockupAnimator() {
     front: "",
     back: "",
     vinyl: "",
+    vinyl2: "",
     label: "",
+    label2: "",
     bg: "",
   });
 
@@ -968,9 +1011,9 @@ export default function VinylMockupAnimator() {
   useEffect(() => {
     let off = false;
 
-    Promise.all([src.front, src.back, src.vinyl, src.label, src.bg].map(loadImg)).then(
-      ([front, back, vinyl, label, bg]) => {
-        if (!off) setImgs({ front, back, vinyl, label, bg });
+    Promise.all([src.front, src.back, src.vinyl, src.vinyl2, src.label, src.label2, src.bg].map(loadImg)).then(
+      ([front, back, vinyl, vinyl2, label, label2, bg]) => {
+        if (!off) setImgs({ front, back, vinyl, vinyl2, label, label2, bg });
       }
     );
 
@@ -1114,7 +1157,10 @@ export default function VinylMockupAnimator() {
             <span className="rounded-full border border-white/10 px-3 py-1">{out.w} × {out.h}</span>
             <span className="rounded-full border border-white/10 px-3 py-1">{s.duration}s</span>
             <span className="rounded-full border border-white/10 px-3 py-1">
-              {Object.values(src).filter(Boolean).length}/5 fichiers
+              {Number(s.vinylCount ?? 1) >= 2 ? "2 vinyles" : "1 vinyle"}
+            </span>
+            <span className="rounded-full border border-white/10 px-3 py-1">
+              {Object.values(src).filter(Boolean).length}/7 fichiers
             </span>
           </div>
         </div>
@@ -1124,17 +1170,28 @@ export default function VinylMockupAnimator() {
         <aside className="space-y-4 rounded-[2rem] bg-white p-4 text-neutral-950 shadow-2xl md:p-5">
           <Sec n="1" title="Modèle">
             <div className="grid gap-2">
-              {PRESETS.map((p) => (
+              {PRESETS.map((p) => {
+                const presetVinylCount = Number(p.settings.vinylCount ?? 1);
+                const isActive = s.mode === p.settings.mode && Number(s.vinylCount ?? 1) === presetVinylCount;
+
+                return (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => {
                     setPreviewPhase(null);
-                    setS((o) => ({ ...o, mode: p.settings.mode }));
+                    setS((o) => ({
+                      ...o,
+                      mode: p.settings.mode,
+                      vinylCount: presetVinylCount,
+                      scale: p.settings.scale ?? o.scale,
+                      title: p.settings.title ?? o.title,
+                      subtitle: p.settings.subtitle ?? o.subtitle,
+                    }));
                     clearExport();
                   }}
                   className={`rounded-2xl border p-3 text-left ${
-                    s.mode === p.settings.mode
+                    isActive
                       ? "border-neutral-950 bg-neutral-950 text-white"
                       : "border-neutral-200 bg-white hover:border-neutral-400"
                   }`}
@@ -1142,7 +1199,8 @@ export default function VinylMockupAnimator() {
                   <div className="text-sm font-semibold">{p.label}</div>
                   <div className="mt-1 text-xs opacity-70">{p.desc}</div>
                 </button>
-              ))}
+                );
+              })}
             </div>
           </Sec>
 
@@ -1247,6 +1305,24 @@ export default function VinylMockupAnimator() {
                 hint="Optionnel"
               />
 
+              {Number(s.vinylCount ?? 1) >= 2 && (
+                <>
+                  <Upload
+                    label="Vinyle 2"
+                    value={src.vinyl2}
+                    set={(v) => upSrc("vinyl2", v)}
+                    hint="Optionnel — reprend le vinyle 1 si vide"
+                  />
+
+                  <Upload
+                    label="Label central 2"
+                    value={src.label2}
+                    set={(v) => upSrc("label2", v)}
+                    hint="Optionnel — reprend le label 1 si vide"
+                  />
+                </>
+              )}
+
               <Upload
                 label="Image de fond"
                 value={src.bg}
@@ -1258,7 +1334,7 @@ export default function VinylMockupAnimator() {
             <button
               type="button"
               onClick={() => {
-                setSrc({ front: "", back: "", vinyl: "", label: "", bg: "" });
+                setSrc({ front: "", back: "", vinyl: "", vinyl2: "", label: "", label2: "", bg: "" });
                 clearExport();
               }}
               className="mt-3 text-xs font-semibold text-neutral-500 hover:text-neutral-950"
@@ -1279,6 +1355,18 @@ export default function VinylMockupAnimator() {
                   <option value="reveal">Disque visible aux deux tiers</option>
                   <option value="album360">Album complet 360°</option>
                   <option value="coverOnly">Pochette seule</option>
+                </select>
+              </label>
+
+              <label className="grid gap-2 text-sm font-medium text-neutral-800">
+                Nombre de vinyles
+                <select
+                  value={Number(s.vinylCount ?? 1)}
+                  onChange={(e) => up("vinylCount", Number(e.target.value))}
+                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
+                >
+                  <option value="1">Vinyle simple</option>
+                  <option value="2">Double vinyle / 2LP</option>
                 </select>
               </label>
 
@@ -1746,6 +1834,9 @@ export default function VinylMockupAnimator() {
 
               <div className="flex gap-2 text-xs text-neutral-400">
                 <span className="rounded-full bg-white/5 px-3 py-1">{s.mode}</span>
+                <span className="rounded-full bg-white/5 px-3 py-1">
+                  {Number(s.vinylCount ?? 1) >= 2 ? "2LP" : "1LP"}
+                </span>
                 <span className="rounded-full bg-white/5 px-3 py-1">{s.bgMode}</span>
               </div>
             </div>
