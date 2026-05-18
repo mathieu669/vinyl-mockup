@@ -605,21 +605,27 @@ function pack(ctx, a, n, back, out, spin, edge, s, absT) {
   const labelA = a.label || a.label2;
   const labelB = a.label2 || a.label;
 
-  if (vinylA && out > 0.01) {
-    if (isDouble && vinylB) {
-      discEdge(ctx, dx + side * n * 0.08, -n * 0.13, r * 0.98, edge * clamp(out * 2.2) * 0.8);
-      discEdge(ctx, dx, n * 0.13, r, edge * clamp(out * 2.2));
-    } else {
-      discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
-    }
+  if (vinylA && out > 0.01 && !isDouble) {
+    discEdge(ctx, dx, 0, r, edge * clamp(out * 2.2));
   }
 
   spine(ctx, art, x, y, n, side, edge, hue, s.sleeveDepth ?? 18, true);
 
   if (vinylA && out > 0.01) {
     if (isDouble && vinylB) {
-      disc(ctx, vinylB, labelB, dx + side * n * 0.08, -n * 0.13, r * 0.98, spin * 0.86 + Math.PI * 0.14, false, s.labelScale ?? 1.2);
-      disc(ctx, vinylA, labelA, dx, n * 0.13, r, spin, false, s.labelScale ?? 1.2);
+      // Rendu 2LP Diggers : les deux disques restent alignés sur le même axe horizontal.
+      // Le deuxième disque est simplement décalé vers l'extérieur, derrière le premier.
+      const disc1X = dx;
+      const disc2X = dx + side * n * 0.3;
+      const visibleEdge = edge * clamp(out * 2.2);
+
+      if (visibleEdge > 0.01) {
+        discEdge(ctx, disc2X, 0, r, visibleEdge * 0.45);
+        discEdge(ctx, disc1X, 0, r, visibleEdge * 0.55);
+      }
+
+      disc(ctx, vinylB, labelB, disc2X, 0, r, spin * 0.88 + Math.PI * 0.08, false, s.labelScale ?? 1.2);
+      disc(ctx, vinylA, labelA, disc1X, 0, r, spin, false, s.labelScale ?? 1.2);
     } else {
       disc(ctx, vinylA, labelA, dx, 0, r, spin, false, s.labelScale ?? 1.2);
     }
@@ -658,10 +664,9 @@ function album360(ctx, a, cx, cy, n, p, s, absT = 0) {
 
 function reveal(ctx, a, cx, cy, n, p, s, absT = 0) {
   const r = n * 0.49;
-  const w = n * 1.67;
   const rot = ((s.blockRot || 0) * Math.PI) / 180;
   const spin = (absT / Math.max(0.001, s.duration)) * Math.PI * 2 * s.discSpin;
-  const y = Math.sin(p * Math.PI * 2) * 14;
+  const y = Math.sin(p * Math.PI * 2) * 10;
   const isDouble = Number(s.vinylCount ?? 1) >= 2;
   const vinylA = a.vinyl || a.vinyl2;
   const vinylB = a.vinyl2 || a.vinyl;
@@ -672,8 +677,8 @@ function reveal(ctx, a, cx, cy, n, p, s, absT = 0) {
     ctx,
     cx + (s.shadowX ?? 0),
     cy + n * 0.38 + y * 0.15 + (s.shadowY ?? 0),
-    n * (isDouble ? 0.9 : 0.78) * (s.shadowW ?? 1),
-    n * 0.18,
+    n * (isDouble ? 0.95 : 0.78) * (s.shadowW ?? 1),
+    n * 0.17,
     s.shadowA
   );
 
@@ -681,16 +686,22 @@ function reveal(ctx, a, cx, cy, n, p, s, absT = 0) {
   ctx.translate(cx, cy + y);
   ctx.rotate(rot);
 
-  const sx = -w / 2;
+  // La composition Diggers de référence n'est pas un éventail :
+  // pochette carrée devant, deux disques sur le même axe, décalés vers la droite.
+  const sx = isDouble ? -n * 0.9 : -(n * 1.67) / 2;
   const sy = -n / 2;
-  const dx = sx + n / 2 + n * 0.67;
+  const coverRight = sx + n;
+  const dx = isDouble ? coverRight + n * 0.035 : sx + n / 2 + n * 0.67;
 
   if (vinylA) {
     if (isDouble && vinylB) {
-      discEdge(ctx, dx + n * 0.14, -n * 0.16, r * 0.98, 0.48);
-      disc(ctx, vinylB, labelB, dx + n * 0.14, -n * 0.16, r * 0.98, spin * 0.88 + Math.PI * 0.16, true, s.labelScale ?? 1.2);
-      discEdge(ctx, dx, n * 0.14, r, 0.75);
-      disc(ctx, vinylA, labelA, dx, n * 0.14, r, spin, true, s.labelScale ?? 1.2);
+      const disc1X = dx;
+      const disc2X = dx + n * 0.3;
+
+      // Ordre strict de superposition : disque 2 au fond, disque 1 devant, pochette au premier plan.
+      // Cela masque naturellement les labels comme sur les visuels produit Diggers.
+      disc(ctx, vinylB, labelB, disc2X, 0, r, spin * 0.88 + Math.PI * 0.08, false, s.labelScale ?? 1.2);
+      disc(ctx, vinylA, labelA, disc1X, 0, r, spin, false, s.labelScale ?? 1.2);
     } else {
       discEdge(ctx, dx, 0, r, 0.75);
       disc(ctx, vinylA, labelA, dx, 0, r, spin, true, s.labelScale ?? 1.2);
